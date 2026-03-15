@@ -1,0 +1,120 @@
+---
+title: "CRM authentication"
+description: "NextAuth v4 with JWT and Credentials provider, role-based access, and session structure."
+---
+
+The Wedding CRM uses [NextAuth v4](https://next-auth.js.org) with the **JWT session strategy** and a **Credentials provider**. There are no OAuth providers — all users authenticate with an email and bcrypt-hashed password stored in the SQLite database.
+
+## Roles
+
+Every `User` record carries a `role` string that controls access within the application.
+
+| Role | Value | Description |
+| --- | --- | --- |
+| Admin | `ADMIN` | Full access to all modules and settings |
+| Relationship Manager | `RELATIONSHIP_MANAGER` | Manages leads and wedding projects |
+| Vendor Coordinator | `VENDOR_COORDINATOR` | Manages vendor directory and assignments |
+| Client | `CLIENT` | Read-only access via the client portal |
+
+## Login page
+
+The login page lives at `/login`. It uses `signIn('credentials', ...)` from NextAuth and redirects to `/dashboard` on success.
+
+### Demo credentials
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Admin | `admin@wedcrm.com` | `admin123` |
+| Relationship Manager | `anjali@wedcrm.com` | `admin123` |
+| Relationship Manager | `rohit@wedcrm.com` | `admin123` |
+| Vendor Coordinator | `meera@wedcrm.com` | `admin123` |
+
+## NextAuth configuration
+
+The auth configuration is defined in `src/lib/auth.ts`:
+
+```typescript
+import { NextAuthOptions } from 'next-auth'
+import CredentialsProvider from 'next-auth/providers/credentials'
+import bcrypt from 'bcryptjs'
+import prisma from './prisma'
+
+export const authOptions: NextAuthOptions = {
+  providers: [
+    CredentialsProvider({
+      name: 'credentials',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) return null
+        const user = await prisma.user.findUnique({ where: { email: credentials.email } })
+        if (!user || !user.isActive) return null
+        const valid = await bcrypt.compare(credentials.password, user.password)
+        if (!valid) return null
+        return { id: user.id, name: user.name, email: user.email, role: user.role }
+      },
+    }),
+  ],
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.role = (user as any).role
+        token.id = user.id
+      }
+      return token
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        (session.user as any).role = token.role
+        ;(session.user as any).id = token.id
+      }
+      return session
+    },
+  },
+  pages: { signIn: '/login' },
+  session: { strategy: 'jwt' },
+  secret: process.env.NEXTAUTH_SECRET,
+}
+```
+
+## JWT token structure
+
+The JWT encodes the following claims beyond the NextAuth defaults:
+
+| Claim | Source | Description |
+| --- | --- | --- |
+| `token.id` | `user.id` | CRM user CUID |
+| `token.role` | `user.role` | One of the four role values above |
+
+These are forwarded into the session object so they are accessible on the client via `useSession()` as `session.user.id` and `session.user.role`.
+
+## Protecting API routes
+
+API routes retrieve the session using `getServerSession(authOptions)` and return `401` if no valid session exists. The pattern used throughout the CRM is:
+
+```typescript
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server'
+
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  // proceed with authenticated logic
+}
+```
+
+## Environment variables
+
+| Variable | Required | Default | Description |
+| --- | --- | --- | --- |
+| `NEXTAUTH_SECRET` | Yes | — | JWT signing secret |
+| `NEXTAUTH_URL` | Yes | `http://localhost:3001` | NextAuth base URL |
+
+<Warning>
+The `NEXTAUTH_SECRET` falls back to a hardcoded string in development (`wedding-crm-secret-key-change-in-production`). Always set a strong secret in any non-local environment.
+</Warning>

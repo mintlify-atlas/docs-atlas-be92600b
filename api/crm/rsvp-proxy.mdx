@@ -1,0 +1,177 @@
+---
+title: "RSVP Integration Proxy"
+description: "CRM-side proxy endpoints that connect to the RSVP Platform. Includes settings management, guest/headcount pulls, guest sync push, and full cache rebuild."
+---
+
+<Note>
+  All endpoints require a **NextAuth session cookie**. The CRM proxies requests to the RSVP Platform using `Authorization: Bearer <rsvpApiKey>` stored on the wedding record. Falls back to local `RSVPGuest` cache when the RSVP Platform is unreachable.
+</Note>
+
+## Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/weddings/:id/rsvp/settings` | Get RSVP integration config |
+| `PUT` | `/api/weddings/:id/rsvp/settings` | Save config + auto-register webhook |
+| `GET` | `/api/weddings/:id/rsvp/guests` | Proxy: guest list (cache fallback) |
+| `GET` | `/api/weddings/:id/rsvp/headcounts` | Proxy: per-event headcounts |
+| `POST` | `/api/weddings/:id/rsvp/sync` | Push guests to RSVP Platform |
+| `POST` | `/api/weddings/:id/rsvp/full-sync` | Pull all guests, rebuild local cache |
+
+---
+
+## GET /api/weddings/:id/rsvp/settings
+
+Returns the current RSVP integration configuration. The `rsvpApiKey` is masked (last 4 chars visible).
+
+```bash
+curl http://localhost:3001/api/weddings/w_1/rsvp/settings \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**200 OK**
+```json
+{
+  "rsvpPlatformUrl": "http://localhost:3000",
+  "rsvpWeddingId": "clx1abc123",
+  "rsvpApiKey": "••••••••ef6a",
+  "isConnected": true
+}
+```
+
+### Response fields
+
+<ResponseField name="rsvpPlatformUrl" type="string | null">Base URL of the RSVP Platform instance.</ResponseField>
+<ResponseField name="rsvpWeddingId" type="string | null">Wedding ID on the RSVP Platform.</ResponseField>
+<ResponseField name="rsvpApiKey" type="string | null">Masked API key (last 4 chars only).</ResponseField>
+<ResponseField name="isConnected" type="boolean">True when all three fields are set.</ResponseField>
+
+---
+
+## PUT /api/weddings/:id/rsvp/settings
+
+Saves the RSVP integration settings. Automatically calls `PUT /api/crm/weddings/:id/webhook` on the RSVP Platform to register the CRM webhook URL (`CRM_BASE_URL/api/webhooks/rsvp`).
+
+### Request body
+
+<ParamField body="rsvpPlatformUrl" type="string" required>
+  Base URL of the RSVP Platform (e.g. `http://localhost:3000`).
+</ParamField>
+
+<ParamField body="rsvpWeddingId" type="string" required>
+  The wedding's ID on the RSVP Platform.
+</ParamField>
+
+<ParamField body="rsvpApiKey" type="string" required>
+  The planner's API key from the RSVP Platform.
+</ParamField>
+
+```bash
+curl -X PUT http://localhost:3001/api/weddings/w_1/rsvp/settings \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{
+    "rsvpPlatformUrl": "http://localhost:3000",
+    "rsvpWeddingId": "clx1abc123",
+    "rsvpApiKey": "rsvp_a1b2c3d4e5f6..."
+  }'
+```
+
+**200 OK**
+```json
+{ "success": true }
+```
+
+<Note>
+  Webhook registration failure is logged but does not fail the request. Check server logs if the CRM is not receiving RSVP updates.
+</Note>
+
+---
+
+## GET /api/weddings/:id/rsvp/guests
+
+Proxies to `GET /api/crm/weddings/:id/guests` on the RSVP Platform with a 10-second timeout. On failure, falls back to local `RSVPGuest` cache records.
+
+### Query parameters
+
+<ParamField query="page" type="number">Page number. Proxied to RSVP Platform with `pageSize=100`.</ParamField>
+
+```bash
+curl "http://localhost:3001/api/weddings/w_1/rsvp/guests?page=1" \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**Cache fallback response:**
+```json
+{
+  "success": true,
+  "data": [ ... ],
+  "meta": { "source": "cache", "warning": "Live fetch failed, showing cached data" }
+}
+```
+
+---
+
+## GET /api/weddings/:id/rsvp/headcounts
+
+Proxies to `GET /api/crm/weddings/:id/headcounts` on the RSVP Platform.
+
+```bash
+curl http://localhost:3001/api/weddings/w_1/rsvp/headcounts \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+Returns per-event headcount data in the same format as the RSVP Platform's headcounts endpoint.
+
+---
+
+## POST /api/weddings/:id/rsvp/sync
+
+Pushes a guest list from the CRM to the RSVP Platform. Proxies the request body directly to `POST /api/crm/weddings/:id/guests/sync` with a 30-second timeout.
+
+### Request body
+
+<ParamField body="guests" type="array" required>
+  Array of guest objects to push. See [CRM Integration Endpoints — guest sync](/api/rsvp/crm-integration#post-apicrm-weddingsidguestssync) for field names.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3001/api/weddings/w_1/rsvp/sync \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{
+    "guests": [
+      { "name": "Rajesh Sharma", "phone": "9876543210", "side": "BRIDE", "events": ["Reception"] }
+    ]
+  }'
+```
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 400 | `"RSVP integration not configured"` |
+| 502 | `"RSVP platform error: ..."` |
+
+---
+
+## POST /api/weddings/:id/rsvp/full-sync
+
+Pulls all pages of guests from the RSVP Platform (up to 1000 guests, 10 pages × 100 per page) and rebuilds the local `RSVPGuest` cache by upserting every record. The overall RSVP status is computed from per-event invite statuses.
+
+```bash
+curl -X POST http://localhost:3001/api/weddings/w_1/rsvp/full-sync \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**200 OK**
+```json
+{ "success": true, "synced": 150, "total": 150 }
+```
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 400 | `"RSVP integration not configured"` |
+| 500 | `"Full sync failed"` |

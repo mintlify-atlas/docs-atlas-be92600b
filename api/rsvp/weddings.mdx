@@ -1,0 +1,207 @@
+---
+title: "Weddings"
+description: "Create and manage wedding projects on the RSVP Platform."
+---
+
+<Note>
+  All endpoints require a valid **NextAuth session cookie** (planner authenticated).
+</Note>
+
+## Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/weddings` | List all weddings for the authenticated planner |
+| `POST` | `/api/weddings` | Create a new wedding |
+| `GET` | `/api/weddings/:weddingId` | Wedding detail with per-event RSVP counts |
+| `PATCH` | `/api/weddings/:weddingId` | Update wedding details |
+| `DELETE` | `/api/weddings/:weddingId` | Delete wedding (cascades all related data) |
+
+---
+
+## GET /api/weddings
+
+Returns a list of all wedding cards belonging to the authenticated planner, ordered by creation date descending. Each card includes computed `responseRate` and `upcomingEventDate`.
+
+```bash
+curl http://localhost:3000/api/weddings \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**200 OK**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "clx1abc123",
+      "brideName": "Ananya",
+      "groomName": "Rohan",
+      "weddingCode": "ananya-rohan-2026",
+      "city": "Mumbai",
+      "primaryColorHex": "#B8860B",
+      "bannerImageUrl": null,
+      "rsvpDeadline": "2026-05-01T00:00:00.000Z",
+      "guestCount": 150,
+      "responseRate": 72,
+      "lastActivity": "2026-03-10T14:22:00.000Z",
+      "upcomingEventDate": "2026-05-15T00:00:00.000Z"
+    }
+  ],
+  "error": null,
+  "meta": null
+}
+```
+
+---
+
+## POST /api/weddings
+
+Creates a new wedding. If `weddingCode` is omitted, it is auto-generated from `brideName-groomName-year` using a URL-safe slug.
+
+### Request body
+
+<ParamField body="brideName" type="string" required>
+  Bride's name.
+</ParamField>
+
+<ParamField body="groomName" type="string" required>
+  Groom's name.
+</ParamField>
+
+<ParamField body="weddingCode" type="string">
+  Optional unique slug (e.g. `ananya-rohan-2026`). Auto-generated if not provided.
+</ParamField>
+
+<ParamField body="city" type="string">
+  City where the wedding takes place.
+</ParamField>
+
+<ParamField body="venueName" type="string">
+  Primary venue name.
+</ParamField>
+
+<ParamField body="primaryColorHex" type="string">
+  Primary brand colour. Defaults to `#B8860B` (gold).
+</ParamField>
+
+<ParamField body="secondaryColorHex" type="string">
+  Secondary brand colour. Defaults to `#800020` (burgundy).
+</ParamField>
+
+<ParamField body="timezone" type="string">
+  IANA timezone string. Defaults to `Asia/Kolkata`.
+</ParamField>
+
+<ParamField body="rsvpDeadline" type="string">
+  ISO 8601 datetime after which RSVPs are closed.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3000/api/weddings \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{
+    "brideName": "Ananya",
+    "groomName": "Rohan",
+    "city": "Mumbai",
+    "venueName": "The Taj Mahal Palace",
+    "rsvpDeadline": "2026-05-01T00:00:00Z"
+  }'
+```
+
+**201 Created** — returns full `Wedding` record.
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 400 | `"Bride and groom names are required"` |
+| 409 | `"This wedding code is already taken. Try a different one."` |
+
+---
+
+## GET /api/weddings/:weddingId
+
+Returns full wedding details with all events and per-event RSVP counts.
+
+### Response fields
+
+<ResponseField name="data" type="object">
+  <Expandable title="Wedding fields">
+    <ResponseField name="id" type="string">CUID</ResponseField>
+    <ResponseField name="brideName" type="string">Bride's name</ResponseField>
+    <ResponseField name="groomName" type="string">Groom's name</ResponseField>
+    <ResponseField name="weddingCode" type="string">Unique URL slug</ResponseField>
+    <ResponseField name="city" type="string">City</ResponseField>
+    <ResponseField name="venueName" type="string">Primary venue</ResponseField>
+    <ResponseField name="primaryColorHex" type="string">Brand colour</ResponseField>
+    <ResponseField name="secondaryColorHex" type="string">Secondary colour</ResponseField>
+    <ResponseField name="bannerImageUrl" type="string | null">Banner image URL</ResponseField>
+    <ResponseField name="timezone" type="string">IANA timezone</ResponseField>
+    <ResponseField name="rsvpDeadline" type="string | null">ISO 8601 deadline</ResponseField>
+    <ResponseField name="photoWallEnabled" type="boolean">Photo wall toggle</ResponseField>
+    <ResponseField name="crmWebhookUrl" type="string | null">CRM webhook URL if set</ResponseField>
+    <ResponseField name="events" type="array">
+      Array of events, each with a `rsvpCounts` object:
+      - `total` — total invitations
+      - `attending` — confirmed
+      - `declined` — declined
+      - `pending` — awaiting response
+      - `plusOnes` — plus-one additions
+      - `children` — children count
+      - `totalPax` — attending + plusOnes + children
+    </ResponseField>
+    <ResponseField name="_count.guests" type="number">Total guest records</ResponseField>
+  </Expandable>
+</ResponseField>
+
+```bash
+curl http://localhost:3000/api/weddings/clx1abc123 \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+---
+
+## PATCH /api/weddings/:weddingId
+
+Partially updates a wedding. Only supply the fields you want to change.
+
+<ParamField body="brideName" type="string">Updated bride name</ParamField>
+<ParamField body="groomName" type="string">Updated groom name</ParamField>
+<ParamField body="city" type="string">City</ParamField>
+<ParamField body="venueName" type="string">Venue name</ParamField>
+<ParamField body="primaryColorHex" type="string">Brand colour</ParamField>
+<ParamField body="secondaryColorHex" type="string">Secondary colour</ParamField>
+<ParamField body="bannerImageUrl" type="string">Banner image URL</ParamField>
+<ParamField body="timezone" type="string">IANA timezone</ParamField>
+<ParamField body="rsvpDeadline" type="string">ISO 8601 deadline or `null` to clear</ParamField>
+<ParamField body="photoWallEnabled" type="boolean">Enable/disable photo wall</ParamField>
+
+```bash
+curl -X PATCH http://localhost:3000/api/weddings/clx1abc123 \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{"photoWallEnabled": true, "city": "Udaipur"}'
+```
+
+---
+
+## DELETE /api/weddings/:weddingId
+
+Deletes the wedding and cascade-deletes all related records: events, guests, check-ins, accommodation rooms, seating tables, photos, display tokens, reminder schedules, and communication logs.
+
+```bash
+curl -X DELETE http://localhost:3000/api/weddings/clx1abc123 \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**200 OK**
+```json
+{ "success": true, "data": { "deleted": true }, "error": null, "meta": null }
+```
+
+| Status | Error |
+|--------|-------|
+| 401 | `"Unauthorized"` |
+| 404 | `"Wedding not found"` |

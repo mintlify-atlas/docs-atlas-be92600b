@@ -1,0 +1,120 @@
+---
+title: "Analytics"
+description: "Comprehensive RSVP analytics for a wedding: per-event breakdowns, dietary stats, outstation ratios, response timeline, and pending guest tracker."
+---
+
+<Note>
+  Requires a valid **NextAuth session cookie** (planner authenticated).
+</Note>
+
+## GET /api/weddings/:weddingId/analytics
+
+Returns a full analytics payload computed across all events for the wedding.
+
+```bash
+curl http://localhost:3000/api/weddings/clx1abc123/analytics \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+### Response fields
+
+<ResponseField name="data.overview" type="object">
+  Top-level wedding summary.
+  <Expandable title="overview fields">
+    <ResponseField name="totalGuests" type="number">Total guest records in the wedding.</ResponseField>
+    <ResponseField name="totalInvitations" type="number">Sum of all guest-event invite records.</ResponseField>
+    <ResponseField name="totalAttending" type="number">Invitations with ATTENDING status.</ResponseField>
+    <ResponseField name="totalDeclined" type="number">Invitations with DECLINED status.</ResponseField>
+    <ResponseField name="totalPending" type="number">Invitations with PENDING status.</ResponseField>
+    <ResponseField name="responseRate" type="number">Percentage of non-pending responses (0–100).</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="data.eventBreakdowns" type="array">
+  Per-event breakdown array.
+  <Expandable title="eventBreakdown fields">
+    <ResponseField name="eventId" type="string">Event CUID.</ResponseField>
+    <ResponseField name="eventName" type="string">Event display name.</ResponseField>
+    <ResponseField name="eventDate" type="string">ISO 8601 date.</ResponseField>
+    <ResponseField name="totalInvited" type="number">Total invitations for this event.</ResponseField>
+    <ResponseField name="attending" type="number">Confirmed attending.</ResponseField>
+    <ResponseField name="declined" type="number">Declined.</ResponseField>
+    <ResponseField name="pending" type="number">Awaiting response.</ResponseField>
+    <ResponseField name="plusOnes" type="number">Plus-one count from attending guests.</ResponseField>
+    <ResponseField name="children" type="number">Children count from attending guests.</ResponseField>
+    <ResponseField name="totalPax" type="number">attending + plusOnes + children.</ResponseField>
+    <ResponseField name="checkedIn" type="number">Guests checked in on the day.</ResponseField>
+    <ResponseField name="dietaryBreakdown" type="object">Map of `DietaryPreference → count` for attending guests.</ResponseField>
+    <ResponseField name="outstationCount" type="number">Outstation attending guests.</ResponseField>
+    <ResponseField name="localCount" type="number">Local attending guests.</ResponseField>
+    <ResponseField name="vipCount" type="number">VIP attending guests.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="data.rsvpTimeline" type="array">
+  Daily response counts: `[{ date: "2026-04-10", count: 12 }, ...]`
+</ResponseField>
+
+<ResponseField name="data.pendingGuests" type="array">
+  Guests still awaiting response. Each entry: `{ guestId, guestName, guestPhone, eventName, side, group, isVip, reminderCount }`.
+</ResponseField>
+
+<ResponseField name="data.allergyGuests" type="array">
+  Attending guests with `dietaryNotes` filled in. Useful for caterer briefings. Each entry: `{ name, notes, isVip, eventName }`.
+</ResponseField>
+
+**200 OK**
+```json
+{
+  "success": true,
+  "data": {
+    "overview": {
+      "totalGuests": 150,
+      "totalInvitations": 320,
+      "totalAttending": 198,
+      "totalDeclined": 42,
+      "totalPending": 80,
+      "responseRate": 75
+    },
+    "eventBreakdowns": [
+      {
+        "eventId": "evt_1",
+        "eventName": "Sangeet Night",
+        "eventDate": "2026-05-13T19:00:00.000Z",
+        "totalInvited": 100,
+        "attending": 72,
+        "declined": 10,
+        "pending": 18,
+        "plusOnes": 12,
+        "children": 5,
+        "totalPax": 89,
+        "checkedIn": 0,
+        "dietaryBreakdown": { "VEG": 50, "NON_VEG": 15, "JAIN": 7 },
+        "outstationCount": 30,
+        "localCount": 42,
+        "vipCount": 8
+      }
+    ],
+    "rsvpTimeline": [
+      { "date": "2026-04-10", "count": 15 },
+      { "date": "2026-04-11", "count": 28 }
+    ],
+    "pendingGuests": [
+      { "guestId": "g_5", "guestName": "Priya Verma", "guestPhone": "+919123456789", "eventName": "Reception", "side": "GROOM", "group": "Family", "isVip": false, "reminderCount": 1 }
+    ],
+    "allergyGuests": [
+      { "name": "Ritu Jain", "notes": "Severe nut allergy", "isVip": false, "eventName": "Reception" }
+    ]
+  },
+  "error": null,
+  "meta": null
+}
+```
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 401 | `"Unauthorized"` |
+| 404 | `"Wedding not found"` |
+| 500 | `"Failed to fetch analytics"` |

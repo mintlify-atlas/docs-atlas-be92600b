@@ -1,0 +1,93 @@
+---
+title: 'Environment variables'
+description: 'Reference for all environment variables used by the RSVP Platform and the Wedding CRM.'
+---
+
+<Tabs>
+  <Tab title="RSVP Platform">
+    Create a `.env` file at `RSVP/.env`.
+
+    ### Core
+
+    | Variable              | Required | Default                  | Description                                      |
+    | --------------------- | -------- | ------------------------ | ------------------------------------------------ |
+    | `DATABASE_URL`        | Yes      | —                        | PostgreSQL connection string                     |
+    | `NEXTAUTH_URL`        | Yes      | `http://localhost:3000`  | NextAuth base URL                                |
+    | `NEXTAUTH_SECRET`     | Yes      | —                        | JWT signing secret                               |
+    | `HMAC_SECRET`         | Yes      | —                        | HMAC-SHA256 secret used to sign QR codes         |
+    | `NEXT_PUBLIC_APP_URL` | No       | `http://localhost:3000`  | Public-facing application URL                    |
+
+    <Warning>
+      `NEXTAUTH_SECRET` and `HMAC_SECRET` must be strong random strings in production. Generate them with:
+
+      ```bash
+      openssl rand -base64 32
+      ```
+
+      Never reuse development secrets in production environments.
+    </Warning>
+
+    ### Auth
+
+    | Variable          | Required | Default | Description                   |
+    | ----------------- | -------- | ------- | ----------------------------- |
+    | `NEXTAUTH_SECRET` | Yes      | —       | JWT signing secret (see above) |
+    | `NEXTAUTH_URL`    | Yes      | `http://localhost:3000` | Canonical URL for NextAuth callbacks |
+
+    ### Messaging
+
+    | Variable              | Required | Default              | Description                         |
+    | --------------------- | -------- | -------------------- | ----------------------------------- |
+    | `REDIS_URL`           | No       | —                    | Redis connection URL for BullMQ     |
+    | `TWILIO_ACCOUNT_SID`  | No       | —                    | Twilio account SID for SMS/WhatsApp |
+    | `TWILIO_AUTH_TOKEN`   | No       | —                    | Twilio authentication token         |
+    | `TWILIO_PHONE_NUMBER` | No       | —                    | Twilio sender phone number          |
+    | `MSG91_AUTH_KEY`      | No       | —                    | MSG91 Indian SMS gateway auth key   |
+    | `MSG91_SENDER_ID`     | No       | —                    | MSG91 sender ID                     |
+    | `SMTP_HOST`           | No       | `smtp.sendgrid.net`  | Email SMTP host                     |
+    | `SMTP_PORT`           | No       | `587`                | Email SMTP port                     |
+    | `SMTP_USER`           | No       | —                    | SMTP username                       |
+    | `SMTP_PASS`           | No       | —                    | SMTP password                       |
+    | `EMAIL_FROM`          | No       | `noreply@wedtech.events` | Sender email address             |
+
+    ### Storage
+
+    | Variable                | Required | Default | Description              |
+    | ----------------------- | -------- | ------- | ------------------------ |
+    | `CLOUDINARY_CLOUD_NAME` | No       | —       | Cloudinary cloud name    |
+    | `CLOUDINARY_API_KEY`    | No       | —       | Cloudinary API key       |
+    | `CLOUDINARY_API_SECRET` | No       | —       | Cloudinary API secret    |
+
+    <Note>
+      **Redis**, **Twilio**, **MSG91**, and **Cloudinary** are all optional. The platform runs without them, but the following features are disabled when they are absent:
+
+      - **Redis** — background reminder job queue (BullMQ). Without it, reminder scheduling is unavailable.
+      - **Twilio** — WhatsApp and international SMS reminders.
+      - **MSG91** — Indian SMS reminders via MSG91 gateway.
+      - **Cloudinary** — guest photo uploads and the public photo wall gallery.
+    </Note>
+  </Tab>
+
+  <Tab title="Wedding CRM">
+    Create a `.env` file at `SaaS/wedding-crm/.env`.
+
+    | Variable          | Required | Default                  | Description                                      |
+    | ----------------- | -------- | ------------------------ | ------------------------------------------------ |
+    | `DATABASE_URL`    | Yes      | `file:./dev.db`          | SQLite database path (LibSQL file URI)           |
+    | `NEXTAUTH_SECRET` | Yes      | —                        | JWT signing secret                               |
+    | `NEXTAUTH_URL`    | Yes      | `http://localhost:3001`  | NextAuth base URL                                |
+    | `CRM_BASE_URL`    | Yes      | `http://localhost:3001`  | CRM's own public URL, used when registering its webhook with the RSVP Platform |
+
+    <Warning>
+      `NEXTAUTH_SECRET` must be a strong random string in production. Generate one with:
+
+      ```bash
+      openssl rand -base64 32
+      ```
+    </Warning>
+
+    <Note>
+      `CRM_BASE_URL` is used internally to construct the webhook registration payload sent to the RSVP Platform. In production, set this to the publicly reachable URL of the CRM so that the RSVP Platform can POST RSVP events back to it.
+    </Note>
+  </Tab>
+</Tabs>

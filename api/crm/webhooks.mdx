@@ -1,0 +1,117 @@
+---
+title: "Webhooks"
+description: "CRM webhook receiver that accepts real-time RSVP update notifications from the RSVP Platform and maintains the local RSVPGuest cache."
+---
+
+<Note>
+  This endpoint is **public** (no authentication required). In development it is called from localhost; in production, HMAC signature verification is recommended.
+</Note>
+
+## POST /api/webhooks/rsvp
+
+Receives real-time RSVP update events from the RSVP Platform. Called by `dispatchRSVPWebhook()` (fire-and-forget, 5-second timeout) after every guest RSVP submission.
+
+The CRM upserts the `RSVPGuest` cache record based on the incoming payload. If the CRM was down when the event fired, use [POST /api/weddings/:id/rsvp/full-sync](/api/crm/rsvp-proxy#post-apiweddingsidrsvpfull-sync) to rebuild the cache.
+
+### Payload
+
+<ParamField body="type" type="string" required>
+  Must be `"rsvp.updated"`. Other types are rejected with a 400 error.
+</ParamField>
+
+<ParamField body="weddingId" type="string" required>
+  The wedding ID **on the RSVP Platform** (`rsvpWeddingId`). Used to look up the matching CRM wedding via `rsvpWeddingId` field.
+</ParamField>
+
+<ParamField body="guestId" type="string" required>
+  Guest CUID on the RSVP Platform.
+</ParamField>
+
+<ParamField body="guestName" type="string" required>
+  Guest full name.
+</ParamField>
+
+<ParamField body="guestPhone" type="string" required>
+  Guest phone number.
+</ParamField>
+
+<ParamField body="responses" type="array" required>
+  Array of per-event responses:
+  - `eventId` (string) — event ID on RSVP Platform
+  - `eventName` (string) — event display name
+  - `rsvpStatus` (string) — `ATTENDING`, `DECLINED`, or `PENDING`
+  - `plusOneCount` (number)
+  - `childrenCount` (number)
+</ParamField>
+
+<ParamField body="timestamp" type="string" required>
+  ISO 8601 timestamp of the RSVP submission.
+</ParamField>
+
+### Example payload
+
+```json
+{
+  "type": "rsvp.updated",
+  "weddingId": "clx1abc123",
+  "guestId": "g_1",
+  "guestName": "Rajesh Sharma",
+  "guestPhone": "+919876543210",
+  "responses": [
+    {
+      "eventId": "evt_1",
+      "eventName": "Sangeet Night",
+      "rsvpStatus": "ATTENDING",
+      "plusOneCount": 1,
+      "childrenCount": 0
+    },
+    {
+      "eventId": "evt_2",
+      "eventName": "Reception",
+      "rsvpStatus": "ATTENDING",
+      "plusOneCount": 1,
+      "childrenCount": 0
+    }
+  ],
+  "timestamp": "2026-04-10T14:35:00.000Z"
+}
+```
+
+### How overall status is computed
+
+| Condition | `overallStatus` |
+|-----------|-----------------|
+| Any response is `ATTENDING` | `ATTENDING` |
+| All responses are `DECLINED` | `DECLINED` |
+| Mix of `PENDING` / no `ATTENDING` | `PENDING` |
+
+```bash
+curl -X POST http://localhost:3001/api/webhooks/rsvp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "rsvp.updated",
+    "weddingId": "clx1abc123",
+    "guestId": "g_1",
+    "guestName": "Rajesh Sharma",
+    "guestPhone": "+919876543210",
+    "responses": [{ "eventId": "evt_1", "eventName": "Sangeet Night", "rsvpStatus": "ATTENDING", "plusOneCount": 1, "childrenCount": 0 }],
+    "timestamp": "2026-04-10T14:35:00.000Z"
+  }'
+```
+
+**200 OK**
+```json
+{ "received": true }
+```
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 400 | `"Invalid payload"` — missing required fields or wrong `type` |
+| 404 | `"No matching CRM wedding"` — no CRM wedding has the given `rsvpWeddingId` |
+| 500 | `"Processing failed"` |
+
+### Production recommendation
+
+In production, add HMAC-SHA256 signature verification to the incoming request to prevent spoofed payloads. Add an `X-RSVP-Signature` header on the RSVP Platform side and verify it in this handler using a shared secret.

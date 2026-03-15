@@ -1,0 +1,344 @@
+---
+title: "RSVP Platform data models"
+description: "All 17 Prisma models and 10 enums for the RSVP Platform, with entity relationships and key field definitions."
+---
+
+The RSVP Platform uses **PostgreSQL** via **Prisma 6.19**. The schema contains 17 models and 10 enums.
+
+## Entity relationship diagram
+
+```
+planners ──────────────── 1:N ──── weddings
+weddings ──────────────── 1:N ──── wedding_events
+weddings ──────────────── 1:N ──── guests
+weddings ──────────────── 1:N ──── accommodation_rooms
+weddings ──────────────── 1:N ──── invite_templates
+weddings ──────────────── 1:N ──── photos
+weddings ──────────────── 1:N ──── display_tokens
+weddings ──────────────── 1:N ──── reminder_schedules
+guests ────────────────── 1:N ──── guest_event_invites
+guests ────────────────── 1:N ──── plus_ones
+guests ────────────────── 1:N ──── check_ins
+guests ────────────────── 1:N ──── communication_logs
+guest_event_invites ──── N:1 ──── wedding_events
+guest_event_invites ──── N:1 ──── seating_tables
+accommodation_rooms ──── 1:N ──── guests
+seating_tables ────────── N:1 ──── wedding_events
+```
+
+## Enums
+
+### RelationshipSide
+
+```prisma
+enum RelationshipSide {
+  BRIDE
+  GROOM
+  MUTUAL
+}
+```
+
+### DietaryPreference
+
+```prisma
+enum DietaryPreference {
+  VEG
+  NON_VEG
+  JAIN
+  VEGAN
+  CUSTOM
+}
+```
+
+### RSVPStatus
+
+```prisma
+enum RSVPStatus {
+  PENDING
+  ATTENDING
+  DECLINED
+}
+```
+
+### CheckInMethod
+
+```prisma
+enum CheckInMethod {
+  QR
+  MANUAL
+}
+```
+
+### InviteTheme
+
+```prisma
+enum InviteTheme {
+  FLORAL
+  ROYAL
+  MINIMAL
+  BOHO
+  TRADITIONAL
+}
+```
+
+### InviteLanguage
+
+```prisma
+enum InviteLanguage {
+  ENGLISH
+  HINDI
+  TAMIL
+  TELUGU
+  BENGALI
+  MARATHI
+  GUJARATI
+  KANNADA
+  PUNJABI
+}
+```
+
+### MessageChannel
+
+```prisma
+enum MessageChannel {
+  WHATSAPP
+  SMS
+  EMAIL
+}
+```
+
+### MessageStatus
+
+```prisma
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+```
+
+### PlanTier
+
+```prisma
+enum PlanTier {
+  FREE
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+```
+
+### PhotoStatus
+
+```prisma
+enum PhotoStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+```
+
+## Models
+
+### Planner
+
+Represents a wedding planner account. Owns all weddings and holds the API key for CRM integration.
+
+```prisma
+model Planner {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  phone        String?
+  password     String    // bcrypt hashed
+  planTier     PlanTier  @default(FREE)
+  logoUrl      String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  apiKey       String?   @unique
+  apiKeyPrefix String?   // first 8 chars for identification
+  weddings     Wedding[]
+  sessions     Session[]
+  accounts     Account[]
+  @@map("planners")
+}
+```
+
+### Account
+
+NextAuth OAuth account adapter model (linked to `Planner`).
+
+### Session
+
+NextAuth session adapter model (linked to `Planner`).
+
+### VerificationToken
+
+NextAuth verification token adapter model.
+
+### Wedding
+
+Top-level container for all wedding data. Each `Planner` can have multiple weddings.
+
+```prisma
+model Wedding {
+  id                String    @id @default(cuid())
+  plannerId         String
+  brideName         String
+  groomName         String
+  weddingCode       String    @unique // e.g. "ananya-rohan-2026"
+  city              String?
+  venueName         String?
+  primaryColorHex   String    @default("#B8860B")  // gold
+  secondaryColorHex String    @default("#800020")  // burgundy
+  bannerImageUrl    String?
+  timezone          String    @default("Asia/Kolkata")
+  rsvpDeadline      DateTime?
+  crmWebhookUrl     String?   // registered CRM webhook URL
+  photoWallEnabled  Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  @@index([plannerId])
+  @@index([weddingCode])
+  @@map("weddings")
+}
+```
+
+### WeddingEvent
+
+An individual ceremony or celebration within a wedding (e.g. Sangeet, Reception).
+
+```prisma
+model WeddingEvent {
+  id               String   @id @default(cuid())
+  weddingId        String
+  name             String   // e.g. "Sangeet Night"
+  slug             String   // URL-safe, e.g. "sangeet-night"
+  date             DateTime
+  time             String?  // display time, e.g. "7:00 PM"
+  venue            String?
+  dressCode        String?
+  description      String?  @db.Text
+  inviteTemplateId String?
+  isActive         Boolean  @default(true)
+  checkInPin       String?  // 4–6 digit PIN for check-in staff
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  @@unique([weddingId, slug])
+  @@map("wedding_events")
+}
+```
+
+### Guest
+
+A guest invited to a wedding. Deduplicated by phone number per wedding.
+
+```prisma
+model Guest {
+  id                  String            @id @default(cuid())
+  weddingId           String
+  name                String
+  phone               String            // primary identifier, +91 format
+  email               String?
+  relationshipSide    RelationshipSide  @default(MUTUAL)
+  groupTag            String?
+  isVip               Boolean           @default(false)
+  isOutstation        Boolean           @default(false)
+  dietaryPref         DietaryPreference @default(VEG)
+  dietaryNotes        String?
+  accommodationRoomId String?
+  plusOneAllowed      Boolean           @default(false)
+  token               String            @unique @default(cuid())
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  @@unique([weddingId, phone])
+  @@map("guests")
+}
+```
+
+### GuestEventInvite
+
+Junction table linking guests to events with per-event RSVP status. One record per guest per event.
+
+```prisma
+model GuestEventInvite {
+  id             String     @id @default(cuid())
+  guestId        String
+  eventId        String
+  rsvpStatus     RSVPStatus @default(PENDING)
+  plusOneCount   Int        @default(0)
+  childrenCount  Int        @default(0)
+  specialNotes   String?
+  respondedAt    DateTime?
+  reminderCount  Int        @default(0)
+  lastRemindedAt DateTime?
+  seatingTableId String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  @@unique([guestId, eventId])
+  @@map("guest_event_invites")
+}
+```
+
+### PlusOne
+
+Sub-profile for a guest's companion.
+
+```prisma
+model PlusOne {
+  id           String            @id @default(cuid())
+  guestId      String
+  name         String
+  dietaryPref  DietaryPreference @default(VEG)
+  dietaryNotes String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  @@map("plus_ones")
+}
+```
+
+### AccommodationRoom
+
+A hotel room allocated to outstation guests. See [Accommodation management](/rsvp/features/accommodation).
+
+### SeatingTable
+
+A table in the visual seating chart for a specific event. See [Seating chart](/rsvp/features/seating-chart).
+
+### InviteTemplate
+
+Themed invite configuration per event or wedding-wide. See [Digital invitations](/rsvp/features/digital-invitations).
+
+### CheckIn
+
+Event-day attendance record. Unique per guest per event. See [Event-day check-in](/rsvp/features/checkin).
+
+### CommunicationLog
+
+Audit trail of every message dispatched to a guest across all channels. See [Reminder engine](/rsvp/features/reminders).
+
+### ReminderSchedule
+
+Configurable trigger rule for automated reminders. See [Reminder engine](/rsvp/features/reminders).
+
+### Photo
+
+Guest-uploaded photo with moderation status. See [Photo wall](/rsvp/features/photo-wall).
+
+### DisplayToken
+
+Time-limited token for the live RSVP display screen at `/display/:weddingCode`.
+
+```prisma
+model DisplayToken {
+  id        String   @id @default(cuid())
+  weddingId String
+  token     String   @unique @default(cuid())
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([token])
+  @@map("display_tokens")
+}
+```

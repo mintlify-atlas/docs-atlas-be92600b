@@ -1,0 +1,98 @@
+---
+title: "Checklists & SOPs"
+description: "Pre-built SOP templates that auto-generate checklists with due dates calculated relative to the wedding date."
+---
+
+The `/checklists` page has two tabs: **SOP Templates** and **Active Checklists**. Templates are reusable blueprints. Applying a template to a wedding generates a `Checklist` record with `ChecklistItem` records whose due dates are automatically calculated from the wedding date.
+
+## Pre-built SOP templates
+
+Three templates are included in the demo seed:
+
+| Template | Items | Category |
+| --- | --- | --- |
+| Pre-Wedding Planning | 14 items | `PRE_WEDDING` |
+| Wedding Day Execution | 12 items | `WEDDING_DAY` |
+| Vendor Management | 10 items | `VENDOR_MGMT` |
+
+## Template categories
+
+When creating a custom template you can choose from:
+
+`PRE_WEDDING`, `WEDDING_DAY`, `POST_WEDDING`, `VENDOR_MGMT`, `LOGISTICS`, `DECOR`, `CATERING`
+
+## Applying a template to a wedding
+
+Click **Apply to Wedding** from the checklists page, then select a template and a wedding. The API creates a checklist with items whose due dates are offset from the wedding date:
+
+```typescript
+// Due date calculation when applying a template
+dueDate: item.daysOffset
+  ? new Date(
+      wedding.weddingDate.getTime() + item.daysOffset * 24 * 60 * 60 * 1000
+    )
+  : null
+```
+
+A `daysOffset` of `-30` means 30 days **before** the wedding. A positive offset means after.
+
+The resulting checklist is named `"<Template Name> - <Client Name>"` and is linked to both the wedding and the source template.
+
+## Item-level tracking
+
+Each `ChecklistItem` tracks:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `title` | String | Task description |
+| `isCompleted` | Boolean | Toggle with one click |
+| `completedAt` | DateTime? | Timestamp set on completion |
+| `dueDate` | DateTime? | Auto-calculated from `daysOffset` |
+| `isMandatory` | Boolean | Flagged as **Required** in the UI |
+| `category` | String? | Groups items within the checklist |
+| `orderIndex` | Int | Display order |
+
+Mandatory items show a red **Required** badge. Completed items are struck through with a green checkmark.
+
+## Progress tracking
+
+Each active checklist shows a progress bar and a fraction (`completed / total`). The client portal also displays this progress percentage when checklist access is enabled.
+
+## API reference
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/api/checklists` | Returns `{ templates, checklists }` |
+| `POST` | `/api/checklists` | Create template (`type: 'template'`) or apply template (`type: 'apply'`) |
+| `PUT` | `/api/checklists/:id` | Toggle a checklist item (`{ toggleItem: itemId }`) |
+| `DELETE` | `/api/checklists/:id` | Delete a checklist |
+
+### Create a template
+
+```bash
+POST /api/checklists
+Content-Type: application/json
+
+{
+  "type": "template",
+  "name": "Destination Wedding SOP",
+  "category": "PRE_WEDDING",
+  "items": [
+    { "title": "Book flights", "daysOffset": -90, "isMandatory": true },
+    { "title": "Confirm hotel block", "daysOffset": -60, "isMandatory": true }
+  ]
+}
+```
+
+### Apply a template
+
+```bash
+POST /api/checklists
+Content-Type: application/json
+
+{
+  "type": "apply",
+  "templateId": "<sop-template-cuid>",
+  "weddingId": "<wedding-cuid>"
+}
+```

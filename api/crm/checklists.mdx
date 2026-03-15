@@ -1,0 +1,185 @@
+---
+title: "Checklists"
+description: "SOP template library and wedding checklist management. Apply pre-built SOP templates to generate checklists with auto-calculated due dates."
+---
+
+<Note>
+  All endpoints require a **NextAuth session cookie**.
+</Note>
+
+## Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/checklists` | List SOP templates and all wedding checklists |
+| `POST` | `/api/checklists` | Create an SOP template or apply one to a wedding |
+| `PUT` | `/api/checklists/:id` | Update a checklist |
+| `DELETE` | `/api/checklists/:id` | Delete a checklist |
+
+---
+
+## GET /api/checklists
+
+Returns both SOP templates (with items and usage count) and all applied checklists (with items and associated wedding).
+
+```bash
+curl http://localhost:3001/api/checklists \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**200 OK**
+```json
+{
+  "templates": [
+    {
+      "id": "tpl_1",
+      "name": "Pre-Wedding Planning",
+      "description": "14-item SOP for pre-wedding tasks",
+      "category": "Planning",
+      "isActive": true,
+      "items": [
+        { "id": "ti_1", "title": "Book venue", "orderIndex": 0, "daysOffset": -90, "isMandatory": true }
+      ],
+      "_count": { "checklists": 4 }
+    }
+  ],
+  "checklists": [
+    {
+      "id": "cl_1",
+      "name": "Pre-Wedding Planning - Kabir Singh",
+      "status": "ACTIVE",
+      "wedding": { "id": "w_1", "clientName": "Kabir Singh" },
+      "template": { "name": "Pre-Wedding Planning" },
+      "items": [ ... ]
+    }
+  ]
+}
+```
+
+---
+
+## POST /api/checklists
+
+Two modes controlled by the `type` field.
+
+### Mode 1: Create SOP template (`type: "template"`)
+
+Creates a new reusable SOP template with items.
+
+<ParamField body="type" type="string" required>
+  Must be `"template"`.
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  Template name.
+</ParamField>
+
+<ParamField body="description" type="string">
+  Template description.
+</ParamField>
+
+<ParamField body="category" type="string">
+  Category label.
+</ParamField>
+
+<ParamField body="items" type="array">
+  Array of template items. Each item: `{ title, description, daysOffset, category, isMandatory }`.
+  - `daysOffset` — days relative to the wedding date (negative = before, positive = after).
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3001/api/checklists \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{
+    "type": "template",
+    "name": "Day-Of Execution",
+    "category": "Execution",
+    "items": [
+      { "title": "Confirm venue setup", "daysOffset": 0, "isMandatory": true },
+      { "title": "Brief all vendors", "daysOffset": -1, "isMandatory": true }
+    ]
+  }'
+```
+
+**201 Created** — returns the new `SOPTemplate` record.
+
+### Mode 2: Apply template to wedding (`type: "apply"`)
+
+Applies a template to a wedding, generating a `Checklist` with auto-calculated `dueDate` for each item based on `daysOffset` from the wedding date.
+
+<ParamField body="type" type="string" required>
+  Must be `"apply"`.
+</ParamField>
+
+<ParamField body="templateId" type="string" required>
+  ID of the SOP template to apply.
+</ParamField>
+
+<ParamField body="weddingId" type="string" required>
+  ID of the wedding to apply the template to.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3001/api/checklists \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{
+    "type": "apply",
+    "templateId": "tpl_1",
+    "weddingId": "w_1"
+  }'
+```
+
+**201 Created** — returns the generated `Checklist` with items.
+
+```json
+{
+  "id": "cl_1",
+  "name": "Pre-Wedding Planning - Kabir Singh",
+  "weddingId": "w_1",
+  "templateId": "tpl_1",
+  "status": "ACTIVE",
+  "items": [
+    {
+      "id": "ci_1",
+      "title": "Book venue",
+      "isCompleted": false,
+      "dueDate": "2026-02-14T00:00:00.000Z",
+      "isMandatory": true
+    }
+  ]
+}
+```
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 400 | `"Invalid type"` |
+| 404 | `"Template not found"` |
+| 404 | `"Wedding not found"` |
+
+---
+
+## PUT /api/checklists/:id
+
+Updates a checklist (name, status) or individual item completion status.
+
+```bash
+curl -X PUT http://localhost:3001/api/checklists/cl_1 \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{"status": "COMPLETED"}'
+```
+
+---
+
+## DELETE /api/checklists/:id
+
+Deletes the checklist and all its items.
+
+```bash
+curl -X DELETE http://localhost:3001/api/checklists/cl_1 \
+  -H "Cookie: next-auth.session-token=<token>"
+```

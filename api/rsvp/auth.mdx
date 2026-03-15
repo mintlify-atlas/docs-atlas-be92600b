@@ -1,0 +1,128 @@
+---
+title: "Authentication"
+description: "Register a planner account and authenticate with NextAuth on the RSVP Platform."
+---
+
+<Note>
+  Planner-facing routes use a **NextAuth session cookie**. The `/api/auth/register` endpoint is public and returns an `apiKey` used by the CRM integration.
+</Note>
+
+## Endpoints
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/api/auth/register` | Public | Register planner, auto-generates `apiKey` |
+| `GET/POST` | `/api/auth/[...nextauth]` | Public | NextAuth login / logout / session |
+
+---
+
+## POST /api/auth/register
+
+Creates a new planner account. An API key is auto-generated on registration using `rsvp_` prefix + 48 hex characters. The key prefix (`apiKeyPrefix`) is stored for identification; the full key is only returned once.
+
+### Request body
+
+<ParamField body="name" type="string" required>
+  Full name of the planner.
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  Unique email address.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  Plain-text password (hashed with bcrypt, cost 12).
+</ParamField>
+
+<ParamField body="phone" type="string">
+  Optional phone number.
+</ParamField>
+
+### Response fields
+
+<ResponseField name="success" type="boolean">
+  `true` on success.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  <Expandable title="data fields">
+    <ResponseField name="id" type="string">
+      CUID of the new planner record.
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      Planner name.
+    </ResponseField>
+    <ResponseField name="email" type="string">
+      Planner email.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<Note>
+  The `apiKey` is **not** returned in the response. Retrieve it from the database via `npx prisma studio` or store it securely at creation time. The CRM integration requires this key.
+</Note>
+
+```bash
+curl -X POST http://localhost:3000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Priya Mehta",
+    "email": "priya@events.com",
+    "password": "securepass123",
+    "phone": "+919876543210"
+  }'
+```
+
+**201 Created**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "clx1abc123",
+    "name": "Priya Mehta",
+    "email": "priya@events.com"
+  },
+  "error": null,
+  "meta": null
+}
+```
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 400 | `"Name, email, and password are required"` |
+| 409 | `"An account with this email already exists"` |
+| 500 | `"Failed to create account"` |
+
+---
+
+## GET /POST /api/auth/[...nextauth]
+
+Standard NextAuth v4 catch-all route. Handles:
+
+- `GET /api/auth/signin` — sign-in page redirect
+- `POST /api/auth/signin/credentials` — credential login (email + password)
+- `GET /api/auth/signout` — sign-out
+- `GET /api/auth/session` — current session data
+- `GET /api/auth/csrf` — CSRF token
+
+Configured with the `credentials` provider using bcrypt password comparison against the `planners` table.
+
+```bash
+# Get current session
+curl http://localhost:3000/api/auth/session \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**Session response**
+```json
+{
+  "user": {
+    "id": "clx1abc123",
+    "name": "Priya Mehta",
+    "email": "priya@events.com"
+  },
+  "expires": "2026-04-15T10:00:00.000Z"
+}
+```

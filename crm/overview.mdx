@@ -1,0 +1,70 @@
+---
+title: "Wedding CRM overview"
+description: "Full-featured CRM for wedding planners running on port 3001."
+---
+
+The Wedding CRM (Product 1) is a full-featured Customer Relationship Management system built for wedding planners. It runs at **http://localhost:3001** on a SQLite database via LibSQL and Prisma, and integrates bidirectionally with the RSVP Platform (Product 2) on port 3000.
+
+## Modules
+
+<CardGroup cols={2}>
+  <Card title="Lead pipeline" icon="filter" href="/crm/modules/lead-pipeline">
+    Kanban-style pipeline with 7 stages from New to Won/Lost, source attribution, priority levels, one-click conversion, and bulk CSV import.
+  </Card>
+  <Card title="Wedding dashboard" icon="house" href="/crm/modules/wedding-dashboard">
+    Central command center for each wedding with 6 tabs: Functions, Vendors, Checklists, Payments, Timeline, and RSVP & Guests.
+  </Card>
+  <Card title="Checklists & SOPs" icon="list-check" href="/crm/modules/checklist-sop">
+    Pre-built SOP templates that auto-generate checklists with due dates calculated relative to the wedding date.
+  </Card>
+  <Card title="Vendor management" icon="store" href="/crm/modules/vendor-management">
+    Vendor database with 16 categories, assignment to weddings and functions, follow-up tracking, and price range classification.
+  </Card>
+  <Card title="Data library" icon="book-open" href="/crm/modules/data-library">
+    Centralised knowledge base with 9 categories, file attachment support, searchable tags, and public/private visibility control.
+  </Card>
+  <Card title="Client portal" icon="globe" href="/crm/modules/client-portal">
+    Token-based client access with configurable permissions and shareable links — no login required for clients.
+  </Card>
+  <Card title="RSVP integration" icon="link" href="/crm/modules/rsvp-integration">
+    Live connection to the RSVP Platform with real-time headcounts, guest list sync, and webhook-based updates.
+  </Card>
+</CardGroup>
+
+## CRM pages
+
+| Route | Description |
+| --- | --- |
+| `/login` | Authentication page with demo credential hints |
+| `/dashboard` | Overview with lead stats, revenue, and upcoming tasks |
+| `/leads` | Lead pipeline with filters, search, and CSV import |
+| `/leads/import` | Bulk data import for leads, vendors, and weddings |
+| `/weddings` | Wedding project list with status filters |
+| `/weddings/:id` | Wedding detail with 6 tabbed modules |
+| `/vendors` | Vendor directory with category and city filters |
+| `/checklists` | SOP template library and applied checklists |
+| `/library` | Knowledge base and document library |
+| `/portal` | Client portal access management |
+
+## Demo credentials
+
+Log in at **http://localhost:3001/login** using any of the following accounts.
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Admin | `admin@wedcrm.com` | `admin123` |
+| Relationship Manager | `anjali@wedcrm.com` | `admin123` |
+| Relationship Manager | `rohit@wedcrm.com` | `admin123` |
+| Vendor Coordinator | `meera@wedcrm.com` | `admin123` |
+
+<Note>
+All accounts share the password `admin123`. The admin account has full access to all modules.
+</Note>
+
+## Demo client portal
+
+Access the pre-seeded client portal (no login required) at:
+
+```
+http://localhost:3001/client/demo-portal-token-kabir
+```

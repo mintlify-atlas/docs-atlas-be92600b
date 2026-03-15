@@ -1,0 +1,160 @@
+---
+title: "Events"
+description: "Manage wedding events (Sangeet, Mehendi, Reception, etc.) under a wedding."
+---
+
+<Note>
+  All endpoints require a valid **NextAuth session cookie**. The `slug` is auto-generated from the event name using a URL-safe slugify function and must be unique per wedding.
+</Note>
+
+## Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/weddings/:weddingId/events` | List all events for a wedding |
+| `POST` | `/api/weddings/:weddingId/events` | Create a new event |
+| `PATCH` | `/api/weddings/:weddingId/events/:eventId` | Update an event |
+| `DELETE` | `/api/weddings/:weddingId/events/:eventId` | Delete an event |
+
+---
+
+## GET /api/weddings/:weddingId/events
+
+Returns all events for a wedding ordered by date ascending. Each event includes `_count` of guest invites and check-ins.
+
+```bash
+curl http://localhost:3000/api/weddings/clx1abc123/events \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**200 OK**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "evt_1",
+      "weddingId": "clx1abc123",
+      "name": "Sangeet Night",
+      "slug": "sangeet-night",
+      "date": "2026-05-13T19:00:00.000Z",
+      "time": "7:00 PM",
+      "venue": "Rooftop Garden",
+      "dressCode": "Cocktail Attire",
+      "description": null,
+      "isActive": true,
+      "checkInPin": null,
+      "_count": { "guestEventInvites": 80, "checkIns": 0 }
+    }
+  ],
+  "error": null,
+  "meta": null
+}
+```
+
+---
+
+## POST /api/weddings/:weddingId/events
+
+Creates a new event. The `slug` is derived from `name` and must be unique within the wedding.
+
+### Request body
+
+<ParamField body="name" type="string" required>
+  Display name (e.g. `"Sangeet Night"`).
+</ParamField>
+
+<ParamField body="date" type="string" required>
+  ISO 8601 date-time of the event.
+</ParamField>
+
+<ParamField body="time" type="string">
+  Human-readable display time (e.g. `"7:00 PM"`).
+</ParamField>
+
+<ParamField body="venue" type="string">
+  Venue name or address.
+</ParamField>
+
+<ParamField body="dressCode" type="string">
+  Dress code description.
+</ParamField>
+
+<ParamField body="description" type="string">
+  Long-form event description.
+</ParamField>
+
+<ParamField body="isActive" type="boolean">
+  Whether the event is active. Defaults to `true`.
+</ParamField>
+
+<ParamField body="checkInPin" type="string">
+  4–6 digit PIN required for check-in staff. Leave null for no PIN protection.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3000/api/weddings/clx1abc123/events \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{
+    "name": "Reception",
+    "date": "2026-05-15T18:00:00Z",
+    "time": "6:00 PM",
+    "venue": "Grand Ballroom",
+    "checkInPin": "4821"
+  }'
+```
+
+**201 Created**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "evt_2",
+    "weddingId": "clx1abc123",
+    "name": "Reception",
+    "slug": "reception",
+    "date": "2026-05-15T18:00:00.000Z",
+    "checkInPin": "4821",
+    "isActive": true
+  },
+  "error": null,
+  "meta": null
+}
+```
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 400 | `"Event name and date are required"` |
+| 409 | `"An event with slug \"reception\" already exists in this wedding"` |
+
+---
+
+## PATCH /api/weddings/:weddingId/events/:eventId
+
+Partially updates an event. Updatable fields: `name`, `date`, `time`, `venue`, `dressCode`, `description`, `isActive`, `checkInPin`.
+
+```bash
+curl -X PATCH http://localhost:3000/api/weddings/clx1abc123/events/evt_2 \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{"checkInPin": "9934", "time": "6:30 PM"}'
+```
+
+---
+
+## DELETE /api/weddings/:weddingId/events/:eventId
+
+Deletes an event and cascade-deletes guest event invites, check-ins, and seating tables associated with it.
+
+```bash
+curl -X DELETE http://localhost:3000/api/weddings/clx1abc123/events/evt_2 \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**200 OK**
+```json
+{ "success": true, "data": { "deleted": true }, "error": null, "meta": null }
+```

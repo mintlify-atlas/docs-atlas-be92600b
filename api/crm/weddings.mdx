@@ -1,0 +1,212 @@
+---
+title: "Weddings"
+description: "Manage wedding projects in the CRM, including wedding functions (Mehendi, Sangeet, Reception, etc.)."
+---
+
+<Note>
+  All endpoints require a **NextAuth session cookie**.
+</Note>
+
+## Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/weddings` | List all weddings |
+| `POST` | `/api/weddings` | Create a wedding |
+| `GET` | `/api/weddings/:id` | Get a single wedding |
+| `PUT` | `/api/weddings/:id` | Update a wedding |
+| `DELETE` | `/api/weddings/:id` | Delete a wedding |
+| `POST` | `/api/weddings/:id/functions` | Add a wedding function |
+
+---
+
+## GET /api/weddings
+
+Returns all weddings with assigned RM, functions, and vendor/checklist counts. Supports filtering and search.
+
+### Query parameters
+
+<ParamField query="status" type="string">
+  Filter by status: `PLANNING`, `IN_PROGRESS`, `COMPLETED`, `ON_HOLD`, `CANCELLED`.
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search by `clientName`, `venue`, or `city`.
+</ParamField>
+
+```bash
+curl "http://localhost:3001/api/weddings?status=PLANNING" \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**200 OK**
+```json
+[
+  {
+    "id": "w_1",
+    "clientName": "Kabir Singh",
+    "partnerName": "Meera Nair",
+    "weddingDate": "2026-05-15T00:00:00.000Z",
+    "venue": "The Leela Palace",
+    "city": "Mumbai",
+    "budget": 2500000,
+    "guestCount": 300,
+    "status": "PLANNING",
+    "theme": "Royal Rajasthani",
+    "assignedRM": { "id": "usr_2", "name": "Anjali" },
+    "functions": [ ... ],
+    "_count": { "vendorAssignments": 6, "checklists": 2 }
+  }
+]
+```
+
+---
+
+## POST /api/weddings
+
+Creates a new wedding project.
+
+### Request body
+
+<ParamField body="clientName" type="string" required>
+  Primary client name.
+</ParamField>
+
+<ParamField body="partnerName" type="string">
+  Partner name.
+</ParamField>
+
+<ParamField body="weddingDate" type="string" required>
+  ISO 8601 wedding date.
+</ParamField>
+
+<ParamField body="venue" type="string">
+  Primary venue.
+</ParamField>
+
+<ParamField body="city" type="string">
+  City.
+</ParamField>
+
+<ParamField body="budget" type="number">
+  Total budget.
+</ParamField>
+
+<ParamField body="guestCount" type="number">
+  Expected guest count.
+</ParamField>
+
+<ParamField body="status" type="string">
+  Defaults to `PLANNING`.
+</ParamField>
+
+<ParamField body="theme" type="string">
+  Wedding theme description.
+</ParamField>
+
+<ParamField body="description" type="string">
+  Notes or description.
+</ParamField>
+
+<ParamField body="assignedRMId" type="string">
+  ID of the assigned Relationship Manager.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3001/api/weddings \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{
+    "clientName": "Kabir Singh",
+    "partnerName": "Meera Nair",
+    "weddingDate": "2026-05-15T00:00:00Z",
+    "venue": "The Leela Palace",
+    "city": "Mumbai",
+    "budget": 2500000,
+    "guestCount": 300
+  }'
+```
+
+**201 Created** — returns the new wedding record.
+
+---
+
+## GET /api/weddings/:id
+
+Returns a single wedding with all related data: functions, vendor assignments, checklists, activities, notes, payments, and RSVP integration settings.
+
+```bash
+curl http://localhost:3001/api/weddings/w_1 \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+---
+
+## PUT /api/weddings/:id
+
+Updates all fields of a wedding record.
+
+```bash
+curl -X PUT http://localhost:3001/api/weddings/w_1 \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{"status": "IN_PROGRESS", "theme": "Floral Garden"}'
+```
+
+---
+
+## DELETE /api/weddings/:id
+
+Deletes the wedding and cascade-deletes all associated records: functions, vendor assignments, checklists, activities, payments, portal accesses, and RSVP guest cache.
+
+```bash
+curl -X DELETE http://localhost:3001/api/weddings/w_1 \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+---
+
+## POST /api/weddings/:id/functions
+
+Adds a wedding function (sub-event) to the wedding. Examples: Mehendi, Haldi, Sangeet, Ceremony, Reception.
+
+### Request body
+
+<ParamField body="name" type="string" required>
+  Function name (e.g. `"Reception"`, `"Haldi"`).
+</ParamField>
+
+<ParamField body="date" type="string">
+  ISO 8601 date of the function.
+</ParamField>
+
+<ParamField body="venue" type="string">
+  Venue for this function.
+</ParamField>
+
+<ParamField body="budget" type="number">
+  Budget allocated for this function.
+</ParamField>
+
+<ParamField body="guestCount" type="number">
+  Expected guest count for this function.
+</ParamField>
+
+<ParamField body="notes" type="string">
+  Function notes.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3001/api/weddings/w_1/functions \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{
+    "name": "Reception",
+    "date": "2026-05-15T18:00:00Z",
+    "venue": "Grand Ballroom",
+    "budget": 800000,
+    "guestCount": 300
+  }'
+```
+
+**201 Created** — returns the new `WeddingFunction` record.

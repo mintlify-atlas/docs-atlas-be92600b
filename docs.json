@@ -1,122 +1,152 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "WedTech Solutions",
+  "theme": "almond",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#C4834A",
+    "light": "#F9EFE6",
+    "dark": "#7B3F1A"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/HarshRaj3112007/Wedtech-solutions"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/HarshRaj3112007/Wedtech-solutions"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Overview",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "architecture"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Configuration",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
-            ]
-          },
-          {
-            "group": "Writing content",
-            "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "configuration/environment-variables",
+              "configuration/database-setup"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Wedding CRM",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "CRM Overview",
             "pages": [
-              "api-reference/introduction"
+              "crm/overview",
+              "crm/authentication"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Modules",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "crm/modules/lead-pipeline",
+              "crm/modules/wedding-dashboard",
+              "crm/modules/checklist-sop",
+              "crm/modules/vendor-management",
+              "crm/modules/data-library",
+              "crm/modules/client-portal",
+              "crm/modules/rsvp-integration"
+            ]
+          },
+          {
+            "group": "Data Models",
+            "pages": [
+              "crm/data-models"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "RSVP Platform",
+        "groups": [
+          {
+            "group": "RSVP Overview",
+            "pages": [
+              "rsvp/overview",
+              "rsvp/authentication"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "rsvp/features/guest-management",
+              "rsvp/features/rsvp-collection",
+              "rsvp/features/digital-invitations",
+              "rsvp/features/checkin",
+              "rsvp/features/seating-chart",
+              "rsvp/features/accommodation",
+              "rsvp/features/analytics",
+              "rsvp/features/photo-wall",
+              "rsvp/features/reminders"
+            ]
+          },
+          {
+            "group": "Data Models",
+            "pages": [
+              "rsvp/data-models"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "RSVP Platform API",
+            "pages": [
+              "api/rsvp/auth",
+              "api/rsvp/weddings",
+              "api/rsvp/events",
+              "api/rsvp/guests",
+              "api/rsvp/checkin",
+              "api/rsvp/analytics",
+              "api/rsvp/accommodation",
+              "api/rsvp/seating",
+              "api/rsvp/reminders",
+              "api/rsvp/photos",
+              "api/rsvp/display",
+              "api/rsvp/crm-integration"
+            ]
+          },
+          {
+            "group": "CRM API",
+            "pages": [
+              "api/crm/auth",
+              "api/crm/dashboard",
+              "api/crm/leads",
+              "api/crm/weddings",
+              "api/crm/vendors",
+              "api/crm/checklists",
+              "api/crm/library",
+              "api/crm/portal",
+              "api/crm/rsvp-proxy",
+              "api/crm/webhooks"
+            ]
+          },
+          {
+            "group": "Integration",
+            "pages": [
+              "api/integration/overview",
+              "api/integration/webhooks",
+              "api/integration/response-format"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

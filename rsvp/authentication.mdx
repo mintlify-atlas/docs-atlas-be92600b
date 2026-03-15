@@ -1,0 +1,129 @@
+---
+title: "RSVP Platform authentication"
+description: "Two authentication modes: JWT sessions for planners via NextAuth, and token-based URL access for guests."
+---
+
+The RSVP Platform uses two distinct authentication mechanisms depending on the actor:
+
+| Actor | Mechanism |
+|---|---|
+| Planner | NextAuth v4 JWT credentials session |
+| Guest | Unique token embedded in URL path |
+| Check-in staff | Per-event PIN |
+| CRM integration | Bearer token (planner API key) |
+
+## Planner authentication
+
+Planners authenticate via NextAuth v4 using the `credentials` provider. A successful login creates a JWT session stored in a cookie.
+
+### Registration
+
+Send a `POST` request to `/api/auth/register` with the following fields:
+
+```typescript
+// Zod schema: registerSchema
+{
+  name: string;          // minimum 2 characters
+  email: string;         // valid email address
+  phone?: string;        // optional — +91 Indian mobile format
+  password: string;      // minimum 8 characters
+  confirmPassword: string;
+}
+```
+
+On successful registration:
+- The password is hashed with **bcryptjs**.
+- A unique **API key** is auto-generated and stored on the `Planner` record.
+- Only the first 8 characters (`apiKeyPrefix`) are stored in plain text for identification; the full key is shown once.
+
+### Login flow
+
+<Steps>
+  <Step title="Submit credentials">
+    POST to `/api/auth/[...nextauth]` with `email` and `password`. NextAuth's credentials provider validates against the database.
+  </Step>
+  <Step title="Session created">
+    NextAuth issues a JWT containing the planner's `id`, `name`, `email`, and `planTier`.
+  </Step>
+  <Step title="Session consumed">
+    Server components call `getCurrentPlanner()` from `src/lib/auth/index.ts`. Protected routes call `requirePlanner()`, which redirects to `/login` if unauthenticated.
+  </Step>
+</Steps>
+
+### JWT session structure
+
+```typescript
+// next-auth.d.ts — augmented session
+interface Session {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    planTier: PlanTier; // FREE | STARTER | PROFESSIONAL | ENTERPRISE
+  };
+}
+```
+
+### NextAuth API routes
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/auth/register` | Register planner, auto-generate API key |
+| `GET/POST` | `/api/auth/[...nextauth]` | NextAuth login, logout, session |
+
+## Guest authentication (token-based)
+
+Guests do not have accounts. Each guest record has a unique `token` field (CUID) generated at creation time. This token is embedded directly in the URL:
+
+```
+/guest/:guestToken
+```
+
+The guest portal API reads this token from the URL path:
+
+```typescript
+// GET /api/guests/:guestToken  — returns guest profile + event invites
+// POST /api/guests/:guestToken/rsvp — submit RSVP responses
+```
+
+<Note>
+  Guest tokens are not time-limited by default. Revoke access by deleting the guest record or updating the token in the database.
+</Note>
+
+## Event-day check-in PIN
+
+Each `WeddingEvent` optionally stores a `checkInPin` (4–6 digits). Check-in staff must enter this PIN when accessing the check-in kiosk at `/checkin/:weddingCode/:eventSlug`.
+
+```typescript
+// Validation rule from weddingEventSchema
+checkInPin: z.string().min(4).max(6).regex(/^\d+$/, "PIN must be digits only").optional()
+```
+
+The check-in API at `GET /api/checkin/:code/:slug` validates the PIN on every request.
+
+## API key (CRM integration)
+
+The CRM authenticates to the RSVP Platform using the planner's API key as a Bearer token:
+
+```http
+Authorization: Bearer <planner_api_key>
+```
+
+The shared helper `authenticateCRM()` in `src/lib/auth/crm.ts` validates this token for all `/api/crm/*` endpoints.
+
+```typescript
+// All CRM-facing endpoints require this header
+Authorization: Bearer ek_live_abc12345...
+```
+
+<Warning>
+  The full API key is displayed only once at registration. Store it securely — it cannot be retrieved again after the initial display.
+</Warning>
+
+## Environment variables for authentication
+
+| Variable | Required | Description |
+|---|---|---|
+| `NEXTAUTH_SECRET` | Yes | JWT signing secret for planner sessions |
+| `NEXTAUTH_URL` | Yes | Base URL (default: `http://localhost:3000`) |
+| `HMAC_SECRET` | Yes | Secret used to sign QR codes for event-day check-in |

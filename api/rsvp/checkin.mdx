@@ -1,0 +1,171 @@
+---
+title: "Check-In"
+description: "Event-day guest check-in via QR code or manual search, with PIN-protected stations."
+---
+
+<Note>
+  Check-in endpoints are **public** (no session cookie required). Authentication is provided by the check-in staff PIN set on each event. QR codes are additionally verified with HMAC-SHA256.
+</Note>
+
+## Endpoints
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/api/checkin/:weddingCode/:eventSlug` | None | Check-in stats + guest search |
+| `POST` | `/api/checkin/:weddingCode/:eventSlug` | PIN in body | Check in a guest |
+
+---
+
+## GET /api/checkin/:weddingCode/:eventSlug
+
+Returns live check-in statistics for an event and optionally searches guests by name or phone.
+
+### Path parameters
+
+<ParamField path="weddingCode" type="string" required>
+  The unique wedding slug (e.g. `ananya-rohan-2026`).
+</ParamField>
+
+<ParamField path="eventSlug" type="string" required>
+  The URL-safe event slug (e.g. `reception`).
+</ParamField>
+
+### Query parameters
+
+<ParamField query="search" type="string">
+  Search guests by name or phone. Returns up to 20 matches.
+</ParamField>
+
+```bash
+curl "http://localhost:3000/api/checkin/ananya-rohan-2026/reception?search=sharma"
+```
+
+**200 OK**
+```json
+{
+  "success": true,
+  "data": {
+    "eventName": "Reception",
+    "totalInvited": 95,
+    "totalCheckedIn": 42,
+    "guests": [
+      {
+        "id": "g_1",
+        "name": "Rajesh Sharma",
+        "phone": "+919876543210",
+        "isVip": true,
+        "checkedIn": false
+      }
+    ]
+  },
+  "error": null,
+  "meta": null
+}
+```
+
+<Note>
+  `totalInvited` counts only guests with `rsvpStatus: ATTENDING`. `totalCheckedIn` reflects actual check-ins performed.
+</Note>
+
+---
+
+## POST /api/checkin/:weddingCode/:eventSlug
+
+Checks in a guest. Supports two methods: QR scan (HMAC-verified) or manual lookup by guest ID.
+
+### Request body
+
+<ParamField body="pin" type="string" required>
+  The check-in staff PIN set on the event. Required if `checkInPin` is configured on the event.
+</ParamField>
+
+<ParamField body="method" type="string" required>
+  `QR` for QR code scan or `MANUAL` for staff-initiated check-in.
+</ParamField>
+
+<ParamField body="guestId" type="string">
+  Required for `MANUAL` method. The CUID of the guest record.
+</ParamField>
+
+<ParamField body="qrData" type="string">
+  Required for `QR` method. JSON string from the QR code containing `{ guestId, eventId, signature }`.
+</ParamField>
+
+<ParamField body="checkedInBy" type="string">
+  Name of the staff member performing check-in. Defaults to `"Staff"`.
+</ParamField>
+
+### QR code format
+
+The QR code payload is a JSON string:
+```json
+{
+  "guestId": "g_1",
+  "eventId": "evt_2",
+  "signature": "<HMAC-SHA256 of 'g_1:evt_2' using HMAC_SECRET env var>"
+}
+```
+
+The server verifies `signature = HMAC-SHA256(guestId + ':' + eventId)` using `HMAC_SECRET`.
+
+```bash
+# Manual check-in
+curl -X POST http://localhost:3000/api/checkin/ananya-rohan-2026/reception \
+  -H "Content-Type: application/json" \
+  -d '{
+    "pin": "4821",
+    "method": "MANUAL",
+    "guestId": "g_1",
+    "checkedInBy": "Ravi"
+  }'
+```
+
+**201 Created — new check-in**
+```json
+{
+  "success": true,
+  "data": {
+    "alreadyCheckedIn": false,
+    "checkedInAt": "2026-05-15T18:34:12.000Z",
+    "guest": {
+      "name": "Rajesh Sharma",
+      "phone": "+919876543210",
+      "dietaryPref": "VEG",
+      "dietaryNotes": null,
+      "isVip": true,
+      "plusOnes": [{ "id": "po_1", "name": "Meena Sharma", "dietaryPref": "VEG" }]
+    },
+    "seatingTable": { "tableNumber": 5, "label": "Rose Table", "zone": "Garden" },
+    "plusOneCount": 1,
+    "childrenCount": 0
+  },
+  "error": null,
+  "meta": null
+}
+```
+
+**200 OK — already checked in**
+```json
+{
+  "success": true,
+  "data": {
+    "alreadyCheckedIn": true,
+    "checkedInAt": "2026-05-15T18:10:00.000Z",
+    "guest": { ... },
+    "seatingTableId": "tbl_5",
+    "plusOneCount": 1
+  }
+}
+```
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 400 | `"Guest ID is required"` |
+| 400 | `"QR code is for a different event"` |
+| 400 | `"Invalid QR code format"` |
+| 403 | `"Invalid check-in PIN"` |
+| 403 | `"Invalid QR code — possible forgery"` |
+| 404 | `"Event not found"` |
+| 404 | `"Guest is not invited to this event"` |

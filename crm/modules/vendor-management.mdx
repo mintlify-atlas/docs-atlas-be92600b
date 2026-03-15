@@ -1,0 +1,103 @@
+---
+title: "Vendor management"
+description: "Vendor database with 16 categories, assignment to weddings and functions, follow-up tracking, and price range classification."
+---
+
+The `/vendors` page is a searchable, filterable directory of all vendors. Click any vendor card to open the detail modal, which shows contact info, wedding assignments, and the follow-up history.
+
+## Vendor categories
+
+Every vendor must belong to one of 16 categories:
+
+| Category value | Display label |
+| --- | --- |
+| `PHOTOGRAPHER` | Photographer |
+| `VIDEOGRAPHER` | Videographer |
+| `CATERER` | Caterer |
+| `DECORATOR` | Decorator |
+| `DJ` | DJ |
+| `MAKEUP_ARTIST` | Makeup Artist |
+| `MEHENDI_ARTIST` | Mehendi Artist |
+| `VENUE` | Venue |
+| `FLORIST` | Florist |
+| `INVITATION` | Invitation |
+| `TRANSPORT` | Transport |
+| `LIGHTING` | Lighting |
+| `ENTERTAINMENT` | Entertainment |
+| `PANDIT` | Pandit |
+| `CHOREOGRAPHER` | Choreographer |
+| `OTHER` | Other |
+
+## Price range
+
+Vendors are classified into four price tiers:
+
+| Value | Description |
+| --- | --- |
+| `BUDGET` | Entry-level pricing |
+| `MODERATE` | Mid-range pricing |
+| `PREMIUM` | High-end pricing |
+| `LUXURY` | Top-tier, luxury pricing |
+
+## Vendor fields
+
+Each `Vendor` record stores:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `name` | String | Vendor / business name |
+| `category` | String | One of the 16 category values |
+| `email` | String? | Contact email |
+| `phone` | String? | Contact phone |
+| `city` | String? | City of operation |
+| `address` | String? | Full address |
+| `rating` | Float? | 1–5 star rating |
+| `priceRange` | String? | One of the four tiers |
+| `website` | String? | Website URL |
+| `instagram` | String? | Instagram handle |
+| `portfolio` | String? | Portfolio URL |
+| `isActive` | Boolean | Whether the vendor is active |
+| `notes` | String? | Internal notes |
+
+## Assigning vendors to weddings
+
+Vendors are assigned to weddings (and optionally to a specific function) via `VendorAssignment` records. Assignment statuses are `PROPOSED` (default) and `CONFIRMED`. An agreed price can be recorded on the assignment.
+
+Assignments are visible on the **Vendors** tab of each wedding dashboard.
+
+## Follow-up tracking
+
+Each vendor has a follow-up log. Follow-up types:
+
+| Type | Value |
+| --- | --- |
+| Call | `CALL` |
+| Email | `EMAIL` |
+| Meeting | `MEETING` |
+| WhatsApp | `WHATSAPP` |
+
+Each follow-up has a scheduled `followUpDate`, optional `notes`, and an `isCompleted` toggle. Incomplete follow-ups show an orange calendar badge on the vendor card.
+
+## API reference
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/api/vendors` | List vendors with optional `category`, `search` filters |
+| `POST` | `/api/vendors` | Create a vendor |
+| `GET` | `/api/vendors/:id` | Vendor detail with assignments and follow-ups |
+| `PUT` | `/api/vendors/:id` | Update vendor |
+| `DELETE` | `/api/vendors/:id` | Delete vendor |
+| `POST` | `/api/vendors/:id/followups` | Add a follow-up entry |
+
+### Add a follow-up
+
+```bash
+POST /api/vendors/<vendor-id>/followups
+Content-Type: application/json
+
+{
+  "type": "CALL",
+  "followUpDate": "2026-03-20",
+  "notes": "Confirm final quote for Sangeet photography"
+}
+```

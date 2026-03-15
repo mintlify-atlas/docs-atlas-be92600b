@@ -1,0 +1,95 @@
+---
+title: "Integration Overview"
+description: "Bidirectional integration architecture between the Wedding CRM and the RSVP Platform. Covers all five integration flows and authentication mechanisms."
+---
+
+WedTech connects two independent products — the **Wedding CRM** (port 3001, SQLite) and the **RSVP Platform** (port 3000, PostgreSQL) — through a bidirectional REST + webhook integration.
+
+```
+┌─────────────────────┐         ┌─────────────────────┐
+│  WEDDING CRM (P1)     │         │  RSVP PLATFORM (P2)  │
+│  Port 3001             │         │  Port 3000            │
+│                       │         │                       │
+│  /api/weddings/:id/   │◄───────│  /api/crm/weddings/   │
+│  rsvp/*               │         │  :id/*                │
+│                       │         │                       │
+│  /api/webhooks/rsvp   │◄───────│  dispatchRSVPWebhook  │
+└─────────────────────┘         └─────────────────────┘
+         │  Push guests to RSVP  ▲
+         └─────────────────────┘
+```
+
+## Integration flows
+
+<Steps>
+  <Step title="Setup: Connect CRM to RSVP Platform">
+    In the CRM, open any wedding → **RSVP & Guests** tab → **Connect RSVP Platform**.
+
+    Enter:
+    - **RSVP Platform URL** — e.g. `http://localhost:3000`
+    - **Wedding ID** — the CUID of the wedding on the RSVP Platform
+    - **API Key** — the planner's `apiKey` from the RSVP Platform `planners` table
+
+    These values are saved to `Wedding.rsvpPlatformUrl`, `rsvpWeddingId`, and `rsvpApiKey` on the CRM wedding record.
+  </Step>
+
+  <Step title="Auto Webhook Registration">
+    When settings are saved via `PUT /api/weddings/:id/rsvp/settings`, the CRM automatically calls:
+
+    ```http
+    PUT /api/crm/weddings/:rsvpWeddingId/webhook
+    Authorization: Bearer <rsvpApiKey>
+    ```
+
+    This registers the CRM's webhook receiver URL (`CRM_BASE_URL/api/webhooks/rsvp`) on the RSVP Platform wedding record (`crmWebhookUrl`). From this point forward, every RSVP submission fires a webhook to the CRM.
+  </Step>
+
+  <Step title="Data Pull: CRM reads from RSVP Platform">
+    The CRM proxies read requests through its own API:
+
+    | CRM Endpoint | Proxied To (RSVP Platform) |
+    |--------------|----------------------------|
+    | `GET /api/weddings/:id/rsvp/guests` | `GET /api/crm/weddings/:id/guests` |
+    | `GET /api/weddings/:id/rsvp/headcounts` | `GET /api/crm/weddings/:id/headcounts` |
+
+    Both endpoints have a 10-second timeout. On failure, the guest list falls back to the local `RSVPGuest` cache. Headcounts do not have a cache fallback.
+  </Step>
+
+  <Step title="Data Push: CRM writes to RSVP Platform">
+    The CRM can push its own guest list to the RSVP Platform:
+
+    ```http
+    POST /api/weddings/:id/rsvp/sync
+    ```
+
+    This proxies to `POST /api/crm/weddings/:id/guests/sync` with a 30-second timeout. Guests are upserted by phone number (deduplicated). Event name matching is case-insensitive.
+  </Step>
+
+  <Step title="Real-Time Updates: RSVP Platform pushes to CRM">
+    When a guest submits an RSVP on the RSVP Platform, the submission handler calls `dispatchRSVPWebhook()` (fire-and-forget, 5-second timeout). This POSTs the `rsvp.updated` payload to `crmWebhookUrl`.
+
+    The CRM webhook receiver at `POST /api/webhooks/rsvp` upserts the `RSVPGuest` cache record.
+
+    If the CRM was down, no data is lost — use **POST /api/weddings/:id/rsvp/full-sync** to rebuild the cache from the RSVP Platform.
+  </Step>
+</Steps>
+
+## Authentication
+
+| Direction | Mechanism |
+|-----------|-----------|
+| CRM → RSVP API calls | `Authorization: Bearer <Planner.apiKey>` |
+| RSVP → CRM webhooks | No auth (localhost dev); HMAC signing recommended for production |
+| Guest RSVP portal | Unique token in URL path (`/guest/:guestToken`) |
+| Event-day check-in | PIN per event + HMAC-SHA256 signed QR codes |
+
+## Related pages
+
+<CardGroup cols={2}>
+  <Card title="Webhooks" href="/api/integration/webhooks">
+    How `dispatchRSVPWebhook()` works and how to handle delivery failures.
+  </Card>
+  <Card title="Response Format" href="/api/integration/response-format">
+    Standard JSON envelope used by both platforms.
+  </Card>
+</CardGroup>

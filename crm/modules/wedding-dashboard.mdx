@@ -1,0 +1,86 @@
+---
+title: "Wedding dashboard"
+description: "Central command center for managing every aspect of a wedding project at /weddings/:id."
+---
+
+Each wedding has a dedicated detail page at `/weddings/:id` that acts as the command center for the entire project. The page opens with a header card showing client names, venue, guest count, budget, and a live **countdown timer** (days until the wedding).
+
+## Stats overview
+
+Four summary tiles beneath the header show at a glance:
+
+| Tile | Source |
+| --- | --- |
+| Functions count | `wedding.functions.length` |
+| Vendors count | `wedding.vendorAssignments.length` |
+| Tasks count | Sum of checklist items across all checklists |
+| Payments count | `wedding.payments.length` |
+
+## Tabs
+
+The wedding dashboard has 6 tabs:
+
+<CardGroup cols={2}>
+  <Card title="Functions" icon="calendar">
+    Manage wedding functions (Mehendi, Sangeet, Haldi, etc.) with date, venue, budget, and task tracking per function.
+  </Card>
+  <Card title="Vendors" icon="store">
+    View all vendor assignments for this wedding — category, function assignment, status, and agreed price.
+  </Card>
+  <Card title="Checklists" icon="list-check">
+    View checklists applied to this wedding with per-item completion checkboxes.
+  </Card>
+  <Card title="Payments" icon="credit-card">
+    Track payments with amount, type, status (Pending / Received / Overdue), and due date.
+  </Card>
+  <Card title="Timeline" icon="clock">
+    Chronological activity feed of all events recorded against this wedding.
+  </Card>
+  <Card title="RSVP & Guests" icon="users">
+    Live headcounts and guest list synced from the RSVP Platform. See the [RSVP integration](/crm/modules/rsvp-integration) page for setup.
+  </Card>
+</CardGroup>
+
+## Wedding function management
+
+The **Functions** tab lets you add ceremony segments to a wedding. The available function names are:
+
+`Mehendi`, `Sangeet`, `Haldi`, `Wedding Ceremony`, `Reception`, `Cocktail Party`, `Engagement`, `Ring Ceremony`, `Welcome Dinner`, `Phera`, `Vidaai`, `After Party`
+
+Each function record stores:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `name` | String | Function name |
+| `date` | DateTime? | Date of the function |
+| `venue` | String? | Venue for this function |
+| `budget` | Float? | Budget allocated |
+| `guestCount` | Int? | Expected guests |
+| `status` | String | `PLANNING`, `CONFIRMED`, `IN_PROGRESS`, `COMPLETED` |
+| `notes` | String? | Free-text notes |
+
+Click **Add Function** to open the modal and select a function name, date, and venue.
+
+### Task tracking per function
+
+Each `WeddingFunction` has a set of `FunctionTask` records. Tasks carry a `title`, `status` (`PENDING` / `IN_PROGRESS` / `COMPLETED`), `priority`, optional `dueDate`, and `description`.
+
+## Budget tracking
+
+Budgets are tracked at two levels:
+
+- **Wedding level** — the overall budget stored on the `Wedding` record, displayed in the header card as `₹X.XL`.
+- **Function level** — each `WeddingFunction` has its own `budget` field visible on the function card.
+
+Payments are recorded separately in the **Payments** tab with statuses `PENDING`, `RECEIVED`, and `OVERDUE`.
+
+## API reference
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/api/weddings` | List all weddings with optional `status` and `search` filters |
+| `POST` | `/api/weddings` | Create a wedding |
+| `GET` | `/api/weddings/:id` | Fetch a single wedding with all relations |
+| `PUT` | `/api/weddings/:id` | Update wedding fields |
+| `DELETE` | `/api/weddings/:id` | Delete wedding (cascades to all children) |
+| `POST` | `/api/weddings/:id/functions` | Add a new function to a wedding |

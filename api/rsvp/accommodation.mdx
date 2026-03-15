@@ -1,0 +1,150 @@
+---
+title: "Accommodation"
+description: "Manage hotel rooms and guest accommodation assignments for a wedding."
+---
+
+<Note>
+  All endpoints require a valid **NextAuth session cookie**. Room uniqueness is enforced by `(weddingId, hotelName, roomNumber)`.
+</Note>
+
+## Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/weddings/:weddingId/accommodation` | List rooms with assigned guests |
+| `POST` | `/api/weddings/:weddingId/accommodation` | Create a new room |
+| `PATCH` | `/api/weddings/:weddingId/accommodation/:roomId` | Update a room |
+| `DELETE` | `/api/weddings/:weddingId/accommodation/:roomId` | Delete a room |
+
+---
+
+## GET /api/weddings/:weddingId/accommodation
+
+Returns a paginated list of rooms. Each room includes the list of guests assigned to it.
+
+### Query parameters
+
+<ParamField query="page" type="number">Page number. Default `1`.</ParamField>
+<ParamField query="pageSize" type="number">Results per page. Default `50`.</ParamField>
+<ParamField query="hotelName" type="string">Filter by hotel name (case-insensitive partial match).</ParamField>
+
+```bash
+curl "http://localhost:3000/api/weddings/clx1abc123/accommodation?hotelName=Taj" \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**200 OK**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "room_1",
+      "weddingId": "clx1abc123",
+      "hotelName": "The Taj Mahal Palace",
+      "roomNumber": "301",
+      "roomType": "Deluxe",
+      "maxOccupancy": 2,
+      "checkInDate": "2026-05-12T00:00:00.000Z",
+      "checkOutDate": "2026-05-16T00:00:00.000Z",
+      "notes": "Sea view requested",
+      "assignedGuests": [
+        { "id": "g_1", "name": "Rajesh Sharma", "phone": "+919876543210", "isVip": true, "dietaryPref": "VEG" }
+      ]
+    }
+  ],
+  "error": null,
+  "meta": { "page": 1, "pageSize": 50, "total": 1 }
+}
+```
+
+---
+
+## POST /api/weddings/:weddingId/accommodation
+
+Creates a new accommodation room.
+
+### Request body
+
+<ParamField body="hotelName" type="string" required>
+  Name of the hotel.
+</ParamField>
+
+<ParamField body="roomNumber" type="string" required>
+  Room number or identifier (e.g. `"301"`, `"Suite A"`).
+</ParamField>
+
+<ParamField body="roomType" type="string" required>
+  Room type (e.g. `"Deluxe"`, `"Suite"`, `"Standard"`).
+</ParamField>
+
+<ParamField body="maxOccupancy" type="number" required>
+  Maximum number of guests the room can hold. Must be ≥ 1.
+</ParamField>
+
+<ParamField body="checkInDate" type="string" required>
+  ISO 8601 check-in date.
+</ParamField>
+
+<ParamField body="checkOutDate" type="string" required>
+  ISO 8601 check-out date. Must be after `checkInDate`.
+</ParamField>
+
+<ParamField body="notes" type="string">
+  Optional free-text notes (e.g. special requests).
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3000/api/weddings/clx1abc123/accommodation \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{
+    "hotelName": "The Taj Mahal Palace",
+    "roomNumber": "301",
+    "roomType": "Deluxe",
+    "maxOccupancy": 2,
+    "checkInDate": "2026-05-12T00:00:00Z",
+    "checkOutDate": "2026-05-16T00:00:00Z",
+    "notes": "Sea view requested"
+  }'
+```
+
+**201 Created** — returns full room record with `assignedGuests`.
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 400 | `"hotelName, roomNumber, roomType, maxOccupancy, checkInDate, and checkOutDate are required"` |
+| 400 | `"checkOutDate must be after checkInDate"` |
+| 400 | `"maxOccupancy must be at least 1"` |
+| 409 | `"Room \"301\" at \"The Taj Mahal Palace\" already exists for this wedding"` |
+
+---
+
+## PATCH /api/weddings/:weddingId/accommodation/:roomId
+
+Partially updates a room. Supply only the fields to change. All create-time fields are updatable.
+
+```bash
+curl -X PATCH http://localhost:3000/api/weddings/clx1abc123/accommodation/room_1 \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{"notes": "Early check-in arranged", "maxOccupancy": 3}'
+```
+
+---
+
+## DELETE /api/weddings/:weddingId/accommodation/:roomId
+
+Deletes the room record. Guests assigned to this room will have their `accommodationRoomId` set to `null`.
+
+```bash
+curl -X DELETE http://localhost:3000/api/weddings/clx1abc123/accommodation/room_1 \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**200 OK**
+```json
+{ "success": true, "data": { "deleted": true }, "error": null, "meta": null }
+```

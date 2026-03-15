@@ -1,0 +1,132 @@
+---
+title: "Guest management"
+description: "Add guests manually or bulk-import from CSV. Phone deduplication, VIP flags, group tags, and dietary preference tracking."
+---
+
+The guest management module lets planners build and maintain a guest list for each wedding. Guests can be added one at a time or imported in bulk from a CSV file.
+
+## Adding guests manually
+
+Navigate to `/weddings/:id/guests` and use the **Add Guest** form. The form is validated against `guestSchema`:
+
+```typescript
+// Zod schema: guestSchema
+{
+  name: string;                              // required
+  phone: string;                             // +91 Indian mobile format
+  email?: string;                            // optional
+  relationshipSide: "BRIDE" | "GROOM" | "MUTUAL"; // default: MUTUAL
+  groupTag?: string;                         // e.g. "College Friends"
+  isVip: boolean;                            // default: false
+  isOutstation: boolean;                     // default: false
+  dietaryPref: "VEG" | "NON_VEG" | "JAIN" | "VEGAN" | "CUSTOM"; // default: VEG
+  dietaryNotes?: string;                     // free-text allergy/custom notes
+  plusOneAllowed: boolean;                   // default: false
+  eventIds?: string[];                       // events to invite this guest to
+}
+```
+
+## CSV bulk import
+
+Upload a CSV file at `/weddings/:id/guests` using the **Import CSV** button. The platform uses PapaParse for flexible, case-insensitive column matching.
+
+### CSV format
+
+```csv
+Name,Phone,Email,Side,Group,Events,VIP,Outstation,Diet,Plus One
+Rajesh Sharma,9876543210,rajesh@email.com,Bride,Family,"Mehendi,Sangeet,Reception",Yes,No,Vegetarian,Yes
+```
+
+### Accepted column values
+
+| Column | Required | Accepted values |
+|---|---|---|
+| Name | Yes | Any string |
+| Phone | Yes | 10-digit Indian mobile (starting with 6/7/8/9) |
+| Email | No | Valid email address |
+| Side | No | `Bride`, `Groom`, `Mutual` |
+| Group | No | `Family`, `Friends`, `Colleagues`, etc. |
+| Events | No | Comma-separated event names |
+| VIP | No | `Yes` / `No` / `True` / `False` / `1` / `0` |
+| Outstation | No | `Yes` / `No` / `True` / `False` / `1` / `0` |
+| Diet / Dietary | No | `Vegetarian`, `Non-Vegetarian`, `Jain`, `Vegan`, `Custom` |
+| Plus One / Plus_One | No | `Yes` / `No` / `True` / `False` / `1` / `0` |
+
+<Note>
+  CSV parsing is case-insensitive for column headers. Columns may appear in any order. Unrecognised columns are silently ignored. Maximum CSV file size is 10 MB.
+</Note>
+
+## Phone number formatting and validation
+
+All phone numbers are normalised to the Indian `+91` format using `formatIndianPhone()`:
+
+```typescript
+// src/lib/utils.ts
+export function formatIndianPhone(phone: string): string {
+  let cleaned = phone.replace(/[\s\-()]/g, "");
+  if (cleaned.startsWith("0")) cleaned = cleaned.slice(1);
+  if (cleaned.startsWith("91") && !cleaned.startsWith("+91")) cleaned = "+" + cleaned;
+  if (!cleaned.startsWith("+91")) cleaned = "+91" + cleaned;
+  return cleaned;
+}
+
+// Validation: must match +91 followed by a digit 6–9 then 9 more digits
+export const indianPhoneRegex = /^\+91[6-9]\d{9}$/;
+```
+
+During CSV import, the phone is formatted then validated. Rows that fail validation are reported in the import error summary.
+
+## Deduplication
+
+Guests are deduplicated by **phone number per wedding**. If a CSV row or manual addition contains a phone number already on the guest list for that wedding, the existing record is updated (upsert) rather than creating a duplicate.
+
+```prisma
+@@unique([weddingId, phone]) // enforced at database level
+```
+
+## Relationship side
+
+Each guest is tagged with a `RelationshipSide` to indicate which family they belong to:
+
+| Enum value | Display label |
+|---|---|
+| `BRIDE` | Bride's side |
+| `GROOM` | Groom's side |
+| `MUTUAL` | Mutual |
+
+## Group tags
+
+The `groupTag` field is a free-text string used to organise guests into named groups such as `Family`, `Friends`, `Colleagues`, `College Friends`, or any custom label.
+
+## VIP and outstation flags
+
+| Flag | Field | Description |
+|---|---|---|
+| VIP | `isVip` | Highlights the guest in lists and check-in views |
+| Outstation | `isOutstation` | Marks guests travelling from out of town; used in analytics |
+
+## Dietary preferences
+
+The `DietaryPreference` enum maps to the following display labels (from `constants.ts`):
+
+| Enum value | Display label |
+|---|---|
+| `VEG` | Vegetarian |
+| `NON_VEG` | Non-Vegetarian |
+| `JAIN` | Jain |
+| `VEGAN` | Vegan |
+| `CUSTOM` | Custom / Other |
+
+The optional `dietaryNotes` field captures free-text allergy information or custom dietary requirements.
+
+## API endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/weddings/:id/guests` | Paginated and filtered guest list |
+| `POST` | `/api/weddings/:id/guests` | Add a single guest |
+| `GET` | `/api/weddings/:id/guests/:guestId` | Full guest profile |
+| `PATCH` | `/api/weddings/:id/guests/:guestId` | Update a guest |
+| `DELETE` | `/api/weddings/:id/guests/:guestId` | Delete a guest |
+| `PUT` | `/api/weddings/:id/guests/:guestId/events` | Replace event assignments |
+| `POST` | `/api/weddings/:id/guests/import` | CSV bulk import |

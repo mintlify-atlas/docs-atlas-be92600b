@@ -1,0 +1,212 @@
+---
+title: "CRM Integration Endpoints"
+description: "RSVP Platform endpoints consumed by the Wedding CRM. All require Bearer token authentication using the planner's API key."
+---
+
+<Note>
+  All endpoints on this page are served by the **RSVP Platform** (port 3000) and called by the **Wedding CRM** (port 3001). Authentication uses `Authorization: Bearer <planner.apiKey>`.
+</Note>
+
+## Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/crm/weddings/:id/guests` | Paginated guest list with full RSVP details |
+| `POST` | `/api/crm/weddings/:id/guests/sync` | Upsert guests pushed from CRM |
+| `GET` | `/api/crm/weddings/:id/headcounts` | Per-event confirmed PAX aggregates |
+| `GET` | `/api/crm/weddings/:id/webhook` | Get current CRM webhook URL |
+| `PUT` | `/api/crm/weddings/:id/webhook` | Set/update CRM webhook URL |
+
+---
+
+## GET /api/crm/weddings/:id/guests
+
+Returns a paginated, full guest list for the wedding including event invites with RSVP status, seating, accommodation, and plus-ones.
+
+### Query parameters
+
+<ParamField query="page" type="number">Page number. Default `1`.</ParamField>
+<ParamField query="pageSize" type="number">Results per page. Default `50`.</ParamField>
+
+```bash
+curl "http://localhost:3000/api/crm/weddings/clx1abc123/guests?page=1&pageSize=100" \
+  -H "Authorization: Bearer rsvp_a1b2c3d4e5f6..."
+```
+
+**200 OK**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "g_1",
+      "name": "Rajesh Sharma",
+      "phone": "+919876543210",
+      "email": "rajesh@email.com",
+      "relationshipSide": "BRIDE",
+      "groupTag": "Family",
+      "isVip": true,
+      "isOutstation": true,
+      "dietaryPref": "VEG",
+      "eventInvites": [
+        {
+          "rsvpStatus": "ATTENDING",
+          "plusOneCount": 1,
+          "childrenCount": 0,
+          "event": { "id": "evt_1", "name": "Sangeet Night", "slug": "sangeet-night", "date": "2026-05-13T19:00:00.000Z" },
+          "seatingTable": { "id": "tbl_1", "tableNumber": 5, "label": "Rose Table", "zone": "Garden" }
+        }
+      ],
+      "accommodationRoom": {
+        "id": "room_1",
+        "hotelName": "The Taj Mahal Palace",
+        "roomNumber": "301",
+        "roomType": "Deluxe",
+        "checkInDate": "2026-05-12T00:00:00.000Z",
+        "checkOutDate": "2026-05-16T00:00:00.000Z"
+      },
+      "plusOnes": [ { "id": "po_1", "name": "Meena Sharma", "dietaryPref": "VEG", "dietaryNotes": null } ]
+    }
+  ],
+  "error": null,
+  "meta": { "page": 1, "pageSize": 100, "total": 150 }
+}
+```
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 401 | `"Unauthorized"` — invalid or missing Bearer token |
+| 404 | `"Wedding not found"` |
+
+---
+
+## POST /api/crm/weddings/:id/guests/sync
+
+CRM pushes a guest list to the RSVP platform. Records are upserted by phone number (`+91` formatted). Missing guests are created; existing guests are updated. Event names in the `events` array are matched case-insensitively to existing wedding events.
+
+### Request body
+
+<ParamField body="guests" type="array" required>
+  Array of guest objects to sync:
+  - `name` (string, required)
+  - `phone` (string, required) — 10-digit Indian mobile
+  - `email` (string, optional)
+  - `side` (string, optional) — `"BRIDE"`, `"GROOM"`, or `"MUTUAL"`
+  - `group` (string, optional) — group tag
+  - `events` (array of strings, optional) — event names to invite the guest to
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3000/api/crm/weddings/clx1abc123/guests/sync \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer rsvp_a1b2c3d4e5f6..." \
+  -d '{
+    "guests": [
+      { "name": "Rajesh Sharma", "phone": "9876543210", "side": "BRIDE", "group": "Family", "events": ["Sangeet Night", "Reception"] },
+      { "name": "Priya Verma", "phone": "9123456789", "side": "GROOM", "events": ["Reception"] }
+    ]
+  }'
+```
+
+**200 OK**
+```json
+{
+  "success": true,
+  "data": {
+    "created": 1,
+    "updated": 1,
+    "errors": []
+  },
+  "error": null,
+  "meta": null
+}
+```
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 400 | `"Request body must include a non-empty guests array"` |
+
+---
+
+## GET /api/crm/weddings/:id/headcounts
+
+Returns per-event confirmed PAX counts. Used by the CRM headcount dashboard.
+
+```bash
+curl http://localhost:3000/api/crm/weddings/clx1abc123/headcounts \
+  -H "Authorization: Bearer rsvp_a1b2c3d4e5f6..."
+```
+
+**200 OK**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "eventId": "evt_1",
+      "eventName": "Sangeet Night",
+      "eventDate": "2026-05-13T19:00:00.000Z",
+      "confirmed": 72,
+      "plusOnes": 12,
+      "children": 5,
+      "totalPax": 89,
+      "declined": 10,
+      "pending": 18
+    }
+  ],
+  "error": null,
+  "meta": null
+}
+```
+
+---
+
+## GET /api/crm/weddings/:id/webhook
+
+Returns the currently registered CRM webhook URL for this wedding.
+
+```bash
+curl http://localhost:3000/api/crm/weddings/clx1abc123/webhook \
+  -H "Authorization: Bearer rsvp_a1b2c3d4e5f6..."
+```
+
+**200 OK**
+```json
+{
+  "success": true,
+  "data": { "webhookUrl": "http://localhost:3001/api/webhooks/rsvp" },
+  "error": null,
+  "meta": null
+}
+```
+
+---
+
+## PUT /api/crm/weddings/:id/webhook
+
+Sets or updates the CRM webhook URL. The CRM calls this automatically when saving integration settings.
+
+<ParamField body="webhookUrl" type="string">
+  Full URL of the CRM webhook receiver. Pass `null` to clear.
+</ParamField>
+
+```bash
+curl -X PUT http://localhost:3000/api/crm/weddings/clx1abc123/webhook \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer rsvp_a1b2c3d4e5f6..." \
+  -d '{"webhookUrl": "http://localhost:3001/api/webhooks/rsvp"}'
+```
+
+**200 OK**
+```json
+{
+  "success": true,
+  "data": { "webhookUrl": "http://localhost:3001/api/webhooks/rsvp" },
+  "error": null,
+  "meta": null
+}
+```

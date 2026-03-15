@@ -1,0 +1,109 @@
+---
+title: "Lead pipeline"
+description: "Kanban-style 7-stage pipeline for managing wedding inquiries from first contact to signed contract."
+---
+
+The lead pipeline at `/leads` is the entry point for all wedding inquiries. It supports both a **Kanban view** (default) and a **list view**, with real-time search and one-click lead-to-wedding conversion.
+
+## Pipeline stages
+
+Leads move through 7 stages in order:
+
+| Stage | Value | Color |
+| --- | --- | --- |
+| New | `NEW` | Blue |
+| Contacted | `CONTACTED` | Yellow |
+| Qualified | `QUALIFIED` | Purple |
+| Proposal Sent | `PROPOSAL_SENT` | Indigo |
+| Negotiation | `NEGOTIATION` | Orange |
+| Won | `WON` | Green |
+| Lost | `LOST` | Red |
+
+In the Kanban view, each column shows the lead count. You can move a lead to any other stage using the **Move to…** dropdown on each card. A **Convert** button appears on cards in the Negotiation column.
+
+## Lead sources
+
+When creating a lead you select one of the following attribution sources:
+
+`Website`, `Instagram`, `Referral`, `Wedding Fair`, `Google`, `Facebook`, `Walk-in`, `Other`
+
+## Priority levels
+
+Each lead carries a priority flag that appears as a badge on the Kanban card:
+
+| Priority | Value |
+| --- | --- |
+| Low | `LOW` |
+| Medium | `MEDIUM` (default) |
+| High | `HIGH` |
+| Urgent | `URGENT` |
+
+## Lead-to-wedding conversion
+
+Clicking **Convert** on a Negotiation-stage card (or calling the API directly) creates a `Wedding` record pre-populated from the lead's data and marks the lead as `WON`.
+
+```bash
+POST /api/leads/convert
+Content-Type: application/json
+
+{ "leadId": "<lead-cuid>" }
+```
+
+The conversion logic:
+
+```typescript
+// Creates a Wedding from the lead's existing fields
+const wedding = await prisma.wedding.create({
+  data: {
+    clientName: lead.name,
+    weddingDate: lead.weddingDate || new Date(),
+    venue: lead.venue,
+    budget: lead.budget,
+    guestCount: lead.guestCount,
+    leadId: lead.id,           // 1:1 relation back to the lead
+    assignedRMId: lead.assignedToId,
+  },
+})
+await prisma.lead.update({ where: { id: lead.id }, data: { status: 'WON' } })
+```
+
+<Note>
+Each lead can be converted only once. The `leadId` field on `Wedding` is unique.
+</Note>
+
+## Bulk CSV import
+
+Navigate to `/leads/import` or click **Import** on the leads page to bulk-import leads from a CSV file. The import API at `POST /api/import` accepts a parsed array of rows with `type: 'leads'`.
+
+### CSV format
+
+```csv
+name,email,phone,source,status,budget,venue,priority
+Priya Sharma,priya@example.com,9876543210,Instagram,NEW,500000,The Leela Delhi,HIGH
+Rahul Mehta,rahul@example.com,9123456789,Referral,CONTACTED,800000,ITC Maurya,MEDIUM
+```
+
+| Column | Required | Notes |
+| --- | --- | --- |
+| `name` / `Name` | Yes | Lead's full name |
+| `email` / `Email` | No | Contact email |
+| `phone` / `Phone` | No | Contact phone |
+| `source` / `Source` | No | One of the source values listed above |
+| `status` / `Status` | No | Defaults to `NEW` |
+| `budget` / `Budget` | No | Numeric — stored as float (INR) |
+| `venue` / `Venue` | No | Preferred venue string |
+| `priority` / `Priority` | No | Defaults to `MEDIUM` |
+
+The import endpoint is also used for vendors and weddings by changing the `type` field to `'vendors'` or `'weddings'`.
+
+## API reference
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/api/leads` | List leads with optional `status`, `source`, `search` filters |
+| `POST` | `/api/leads` | Create a single lead |
+| `GET` | `/api/leads/:id` | Fetch a single lead |
+| `PUT` | `/api/leads/:id` | Update a lead (e.g., change status) |
+| `DELETE` | `/api/leads/:id` | Delete a lead |
+| `POST` | `/api/leads/convert` | Convert lead to wedding |
+| `POST` | `/api/import` | Bulk import leads, vendors, or weddings from CSV data |

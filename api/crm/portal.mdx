@@ -1,0 +1,140 @@
+---
+title: "Client Portal"
+description: "Manage token-based client access to wedding data. Clients can view timelines, checklists, vendors, and payments based on configured permissions."
+---
+
+<Note>
+  The management endpoints (`GET /api/portal` and `POST /api/portal`) require a **NextAuth session cookie**. The client-facing endpoint `GET /api/portal/:token` is **public** — the access token in the URL acts as authentication.
+</Note>
+
+## Endpoints
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/api/portal` | Planner | List all client portal accesses |
+| `POST` | `/api/portal` | Planner | Create a portal access link |
+| `GET` | `/api/portal/:token` | None | Client-facing portal data by token |
+
+---
+
+## GET /api/portal
+
+Returns all client portal access records with associated wedding and creator user.
+
+```bash
+curl http://localhost:3001/api/portal \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**200 OK**
+```json
+[
+  {
+    "id": "pa_1",
+    "accessToken": "demo-portal-token-kabir",
+    "permissions": "VIEW_TIMELINE,VIEW_CHECKLIST,VIEW_VENDORS",
+    "isActive": true,
+    "lastAccessed": "2026-03-14T10:22:00.000Z",
+    "createdAt": "2026-02-01T09:00:00.000Z",
+    "wedding": {
+      "id": "w_1",
+      "clientName": "Kabir Singh",
+      "weddingDate": "2026-05-15T00:00:00.000Z",
+      "venue": "The Leela Palace"
+    },
+    "user": { "name": "Admin", "email": "admin@wedcrm.com" }
+  }
+]
+```
+
+---
+
+## POST /api/portal
+
+Creates a portal access link. If no `CLIENT` role user exists for the given email, one is automatically created.
+
+### Request body
+
+<ParamField body="weddingId" type="string" required>
+  ID of the wedding to grant access to.
+</ParamField>
+
+<ParamField body="clientEmail" type="string" required>
+  Client email address. Used to create or look up a `CLIENT` user.
+</ParamField>
+
+<ParamField body="clientName" type="string">
+  Client display name (used when creating a new user record).
+</ParamField>
+
+<ParamField body="permissions" type="string">
+  Comma-separated permission list. Defaults to `VIEW_TIMELINE,VIEW_CHECKLIST`.
+  Available permissions: `VIEW_TIMELINE`, `VIEW_CHECKLIST`, `VIEW_VENDORS`, `VIEW_PAYMENTS`.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3001/api/portal \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{
+    "weddingId": "w_1",
+    "clientEmail": "kabir@example.com",
+    "clientName": "Kabir Singh",
+    "permissions": "VIEW_TIMELINE,VIEW_CHECKLIST,VIEW_VENDORS"
+  }'
+```
+
+**201 Created**
+```json
+{
+  "id": "pa_2",
+  "weddingId": "w_1",
+  "userId": "usr_client_1",
+  "accessToken": "a1b2c3d4-e5f6-...",
+  "permissions": "VIEW_TIMELINE,VIEW_CHECKLIST,VIEW_VENDORS",
+  "isActive": true,
+  "lastAccessed": null,
+  "createdAt": "2026-03-20T09:00:00.000Z"
+}
+```
+
+---
+
+## GET /api/portal/:token
+
+Public endpoint. Returns wedding data filtered by the permissions configured on the access record. Updates `lastAccessed` on each call.
+
+```bash
+curl http://localhost:3001/api/portal/demo-portal-token-kabir
+```
+
+**200 OK**
+```json
+{
+  "wedding": {
+    "clientName": "Kabir Singh",
+    "weddingDate": "2026-05-15T00:00:00.000Z",
+    "venue": "The Leela Palace",
+    "status": "PLANNING"
+  },
+  "permissions": ["VIEW_TIMELINE", "VIEW_CHECKLIST", "VIEW_VENDORS"],
+  "functions": [ ... ],
+  "checklists": [ ... ],
+  "vendors": [ ... ]
+}
+```
+
+### Available data by permission
+
+| Permission | Data returned |
+|------------|---------------|
+| `VIEW_TIMELINE` | `functions` with tasks |
+| `VIEW_CHECKLIST` | `checklists` with items |
+| `VIEW_VENDORS` | `vendors` (name, category, phone) |
+| `VIEW_PAYMENTS` | `payments` |
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 404 | `"Invalid or expired access link"` |

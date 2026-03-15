@@ -1,0 +1,119 @@
+---
+title: 'Architecture'
+description: 'WedTech consists of two fully integrated Next.js applications that communicate bidirectionally through REST APIs and real-time webhooks.'
+---
+
+## System diagram
+
+```text
+┌──────────────────────────────────┐       ┌──────────────────────────────────┐
+│     WEDDING CRM (P1)            │       │     RSVP PLATFORM (P2)          │
+│     Port 3001                    │       │     Port 3000                    │
+│     SQLite (LibSQL)              │       │     PostgreSQL                   │
+│                                  │       │                                  │
+│  ┌─────────────────────────┐     │       │  ┌─────────────────────────┐     │
+│  │  Dashboard / Leads      │     │       │  │  Planner Dashboard      │     │
+│  │  Weddings / Vendors     │     │       │  │  Guest Management       │     │
+│  │  Checklists / Payments  │     │       │  │  RSVP / Analytics       │     │
+│  │  Client Portal          │     │       │  │  Check-in / Seating     │     │
+│  │  RSVP & Guests Tab ──────────────────────  CRM API Endpoints      │     │
+│  └─────────────────────────┘     │       │  └─────────────────────────┘     │
+│                                  │       │                                  │
+│  API: /api/weddings/:id/rsvp/*   │◄──────│  API: /api/crm/weddings/:id/*   │
+│  Webhook: /api/webhooks/rsvp     │◄──────│  Webhook: dispatchRSVPWebhook() │
+└──────────────────────────────────┘       └──────────────────────────────────┘
+             │                                            ▲
+             │         Push guests to RSVP                │
+             └────────────────────────────────────────────┘
+```
+
+## Products
+
+<Columns cols={2}>
+  <Card title="Wedding CRM" icon="briefcase">
+    **Location:** `SaaS/wedding-crm/`
+
+    **Port:** 3001
+
+    **Database:** SQLite via LibSQL + Prisma 7.5
+
+    A full-featured CRM built for wedding planners. Manages leads, weddings, vendors, checklists, payments, client portals, and RSVP integration across 7 modules and 18 data models.
+  </Card>
+  <Card title="RSVP Platform" icon="envelope">
+    **Location:** `RSVP/`
+
+    **Port:** 3000
+
+    **Database:** PostgreSQL via Prisma 6.19
+
+    A complete RSVP management platform handling digital invites, guest management, seating, accommodations, event-day check-in, analytics, and a photo wall — across 17 models and 10 enums.
+  </Card>
+</Columns>
+
+## Data flow
+
+The two products communicate bidirectionally. The CRM holds the source-of-truth for wedding and lead data; the RSVP Platform holds the source-of-truth for guest RSVP status.
+
+| Direction       | Mechanism                                                                 |
+| --------------- | ------------------------------------------------------------------------- |
+| CRM → RSVP      | Push guest lists via `POST /api/crm/weddings/:id/guests/sync`             |
+| CRM → RSVP      | Pull headcounts via `GET /api/crm/weddings/:id/headcounts`                |
+| CRM → RSVP      | Pull guest list via `GET /api/crm/weddings/:id/guests`                    |
+| CRM → RSVP      | Register webhook URL via `PUT /api/crm/weddings/:id/webhook`              |
+| RSVP → CRM      | Real-time webhooks fired on every RSVP submission; CRM caches locally     |
+
+## Integration flows
+
+There are five distinct flows that make up the CRM ↔ RSVP integration:
+
+**1. Setup**
+
+In the CRM, open any wedding → **RSVP & Guests** tab → **Connect RSVP Platform**. Enter the RSVP Platform URL, Wedding ID, and Planner API Key, then save.
+
+**2. Auto webhook registration**
+
+When integration settings are saved, the CRM automatically calls `PUT /api/crm/weddings/:id/webhook` on the RSVP Platform to register its inbound webhook URL (`http://localhost:3001/api/webhooks/rsvp`). No manual configuration is required.
+
+**3. Data pull (CRM → RSVP)**
+
+The CRM proxies read requests through its own API layer to the RSVP Platform:
+
+- `GET /api/weddings/:id/rsvp/headcounts` → proxies to RSVP's `/api/crm/weddings/:id/headcounts`
+- `GET /api/weddings/:id/rsvp/guests` → proxies to RSVP's `/api/crm/weddings/:id/guests`
+
+If the RSVP Platform is unreachable, responses fall back to the locally cached `RSVPGuest` records in the CRM database.
+
+**4. Data push (CRM → RSVP)**
+
+The CRM can push its guest list to the RSVP Platform:
+
+- `POST /api/weddings/:id/rsvp/sync` → proxies to RSVP's `/api/crm/weddings/:id/guests/sync`
+
+Guests are deduplicated by phone number on the RSVP side.
+
+**5. Real-time updates (RSVP → CRM)**
+
+When a guest submits an RSVP on the RSVP Platform, `dispatchRSVPWebhook()` fires a fire-and-forget POST (5 s timeout) to the CRM's webhook receiver at `/api/webhooks/rsvp`. The CRM upserts the `RSVPGuest` cache record immediately. If the CRM is offline, a full resync via `POST /api/weddings/:id/rsvp/full-sync` rebuilds the local cache from scratch.
+
+## Authentication
+
+| Direction             | Mechanism                                                                 |
+| --------------------- | ------------------------------------------------------------------------- |
+| CRM → RSVP API calls  | Bearer token (`Planner.apiKey`) in the `Authorization` header             |
+| RSVP → CRM webhooks   | No auth in development (localhost); HMAC signing recommended for production |
+| Guest RSVP portal     | Unique token in the URL path (`/guest/:guestToken`)                       |
+| Event-day check-in    | PIN per event + HMAC-SHA256-signed QR codes                               |
+
+## Tech stack
+
+| Layer              | CRM (Product 1)                  | RSVP Platform (Product 2)        |
+| ------------------ | -------------------------------- | -------------------------------- |
+| **Framework**      | Next.js 16.1.6 (App Router)      | Next.js 16.1.6 (App Router)      |
+| **Language**       | TypeScript 5                     | TypeScript 5                     |
+| **Database**       | SQLite via LibSQL + Prisma 7.5   | PostgreSQL via Prisma 6.19       |
+| **Authentication** | NextAuth v4 (JWT + Credentials)  | NextAuth v4 (JWT + Credentials)  |
+| **Styling**        | Tailwind CSS v4                  | Tailwind CSS v4 + shadcn/ui      |
+| **SMS/WhatsApp**   | —                                | Twilio + MSG91                   |
+| **Image CDN**      | —                                | Cloudinary                       |
+| **Job queue**      | —                                | BullMQ + ioredis (Redis)         |
+| **Email**          | —                                | Nodemailer (SendGrid SMTP)       |

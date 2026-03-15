@@ -1,0 +1,86 @@
+---
+title: "RSVP Platform overview"
+description: "Events by Athea — a complete RSVP management platform for Indian weddings, running on Port 3000 with PostgreSQL."
+---
+
+The RSVP Platform (branded as **Events by Athea**) is Product 2 of the WedTech Innovation Suite. It handles everything from digital invitations to event-day check-in, and communicates bidirectionally with the Wedding CRM via REST APIs and real-time webhooks.
+
+| Property | Value |
+|---|---|
+| **Port** | 3000 |
+| **Database** | PostgreSQL 14+ via Prisma 6.19 |
+| **Framework** | Next.js 16.1.6 (App Router) |
+| **Brand name** | Events by Athea |
+
+## Feature areas
+
+<CardGroup cols={2}>
+  <Card title="Guest management" icon="users" href="/rsvp/features/guest-management">
+    Add guests manually or bulk-import from CSV. Phone deduplication, VIP flags, dietary tracking, and group tags.
+  </Card>
+  <Card title="RSVP collection" icon="clipboard-check" href="/rsvp/features/rsvp-collection">
+    Token-based guest portal with per-event attending/declined responses, plus-one and children counts, and real-time webhook dispatch.
+  </Card>
+  <Card title="Digital invitations" icon="envelope" href="/rsvp/features/digital-invitations">
+    5 themes, 9 Indian languages, animated invite option, and customisable background images.
+  </Card>
+  <Card title="Event-day check-in" icon="qr-code" href="/rsvp/features/checkin">
+    HMAC-SHA256 signed QR codes, PIN-protected check-in stations, and duplicate check-in prevention.
+  </Card>
+  <Card title="Seating chart" icon="layout-grid" href="/rsvp/features/seating-chart">
+    Visual table layout with X/Y positioning, zones, and drag-and-drop guest assignment.
+  </Card>
+  <Card title="Accommodation" icon="hotel" href="/rsvp/features/accommodation">
+    Multi-hotel room tracking with occupancy, check-in/check-out dates, and guest-to-room assignment.
+  </Card>
+  <Card title="Analytics dashboard" icon="bar-chart" href="/rsvp/features/analytics">
+    Per-event RSVP breakdowns, dietary distribution, outstation ratios, and pending response tracking.
+  </Card>
+  <Card title="Photo wall" icon="image" href="/rsvp/features/photo-wall">
+    Guest photo uploads with moderation, public gallery, and Cloudinary CDN integration.
+  </Card>
+  <Card title="Reminder engine" icon="bell" href="/rsvp/features/reminders">
+    Multi-channel reminders (WhatsApp, SMS, Email) via BullMQ + Redis with configurable day-offset schedules.
+  </Card>
+  <Card title="Authentication" icon="lock" href="/rsvp/authentication">
+    Planner JWT sessions via NextAuth, guest token URLs, PIN-protected check-in, and API key bearer tokens.
+  </Card>
+</CardGroup>
+
+## Application pages
+
+### Planner dashboard (authenticated)
+
+| Route | Description |
+|---|---|
+| `/register` | Planner account registration (auto-generates API key) |
+| `/login` | Planner login |
+| `/dashboard` | Wedding overview and quick actions |
+| `/weddings/new` | Create a new wedding project |
+| `/weddings/:id` | Wedding detail and configuration |
+| `/weddings/:id/guests` | Guest list management and CSV import |
+| `/weddings/:id/analytics` | RSVP analytics dashboard |
+| `/weddings/:id/accommodation` | Room and hotel management |
+| `/weddings/:id/seating` | Visual seating chart |
+| `/weddings/:id/reminders` | Reminder schedule configuration |
+
+### Guest-facing (token-based, no login)
+
+| Route | Description |
+|---|---|
+| `/guest/:guestToken` | Personalised RSVP portal |
+| `/invite/:weddingCode/:eventSlug` | Themed digital invitation |
+| `/gallery/:weddingCode` | Public photo gallery |
+
+### Event-day
+
+| Route | Description |
+|---|---|
+| `/checkin/:weddingCode/:eventSlug` | Check-in kiosk |
+| `/display/:weddingCode` | Live RSVP display screen |
+
+## shadcn/ui components (23)
+
+The RSVP Platform uses the following shadcn/ui components:
+
+`Avatar`, `Badge`, `Button`, `Card`, `Checkbox`, `Command`, `Dialog`, `DropdownMenu`, `Input`, `InputGroup`, `Label`, `Popover`, `ScrollArea`, `Select`, `Separator`, `Sheet`, `Skeleton`, `Sonner`, `Switch`, `Table`, `Tabs`, `Textarea`, `Tooltip`

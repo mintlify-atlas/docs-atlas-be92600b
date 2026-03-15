@@ -1,0 +1,94 @@
+---
+title: "Photo wall"
+description: "Guest photo uploads with a moderation queue, public gallery, and Cloudinary CDN integration."
+---
+
+The photo wall lets guests upload photos via their RSVP portal. Uploaded photos enter a moderation queue before appearing in the public gallery.
+
+## URLs
+
+| URL | Description |
+|---|---|
+| `/guest/:guestToken` | Guests upload photos through their RSVP portal |
+| `/gallery/:weddingCode` | Public photo gallery, no login required |
+
+## PhotoStatus enum
+
+| Value | Description |
+|---|---|
+| `PENDING_REVIEW` | Photo uploaded, awaiting planner review |
+| `APPROVED` | Photo approved and visible in public gallery |
+| `REJECTED` | Photo rejected and hidden from gallery |
+
+## Moderation workflow
+
+<Steps>
+  <Step title="Guest uploads photo">
+    A guest submits a photo via their token-authenticated RSVP portal. The photo is uploaded to Cloudinary and a `Photo` record is created with `status = PENDING_REVIEW`.
+  </Step>
+  <Step title="Planner reviews">
+    The planner sees pending photos in the wedding management dashboard at `/weddings/:id`.
+  </Step>
+  <Step title="Approve or reject">
+    The planner sets `status` to `APPROVED` or `REJECTED`. Only approved photos appear in the public gallery.
+  </Step>
+</Steps>
+
+## Photo data model
+
+```prisma
+model Photo {
+  id           String      @id @default(cuid())
+  weddingId    String
+  guestId      String?     // null if uploaded by planner
+  imageUrl     String
+  thumbnailUrl String?
+  caption      String?
+  status       PhotoStatus @default(PENDING_REVIEW)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  wedding Wedding @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  guest   Guest?  @relation(fields: [guestId], references: [id])
+
+  @@index([weddingId])
+  @@index([status])
+  @@map("photos")
+}
+```
+
+## Enabling the photo wall
+
+The `Wedding.photoWallEnabled` boolean must be set to `true` for a wedding before guests can upload photos.
+
+```prisma
+photoWallEnabled Boolean @default(false)
+```
+
+## Cloudinary CDN configuration
+
+Images are stored on Cloudinary. Set the following environment variables:
+
+```bash
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+```
+
+| Variable | Required | Description |
+|---|---|---|
+| `CLOUDINARY_CLOUD_NAME` | No* | Cloudinary cloud identifier |
+| `CLOUDINARY_API_KEY` | No* | Cloudinary API key |
+| `CLOUDINARY_API_SECRET` | No* | Cloudinary API secret |
+
+<Note>
+  The photo wall feature is inactive when Cloudinary variables are not set. The `next.config.ts` file pre-configures allowed image domains for Cloudinary and Unsplash. Maximum photo upload size is 15 MB.
+</Note>
+
+## API endpoints
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/gallery/:code` | Public | Public photo gallery data |
+| `GET` | `/api/weddings/:id/photos` | Planner | All photos including pending |
+| `POST` | `/api/weddings/:id/photos` | Planner | Upload or moderate photos |

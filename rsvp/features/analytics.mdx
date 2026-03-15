@@ -1,0 +1,103 @@
+---
+title: "Analytics dashboard"
+description: "Per-event RSVP breakdowns, dietary distribution, outstation ratios, and a pending response tracker."
+---
+
+The analytics dashboard gives planners a comprehensive view of RSVP engagement and guest composition for each wedding.
+
+## Planner URL
+
+```
+/weddings/:id/analytics
+```
+
+## API endpoint
+
+```
+GET /api/weddings/:id/analytics
+```
+
+Requires planner authentication. Returns the full analytics payload for the wedding.
+
+## Dashboard sections
+
+### Per-event RSVP breakdown
+
+For each `WeddingEvent` in the wedding, the dashboard shows:
+
+| Metric | Description |
+|---|---|
+| **Confirmed** | Guests with `rsvpStatus = ATTENDING` |
+| **Pending** | Guests with `rsvpStatus = PENDING` (no response yet) |
+| **Declined** | Guests with `rsvpStatus = DECLINED` |
+
+Counts are aggregated from `GuestEventInvite` records grouped by `eventId`.
+
+### Dietary preference distribution
+
+A breakdown of dietary preferences across all guests for the wedding:
+
+| Preference | Enum value |
+|---|---|
+| Vegetarian | `VEG` |
+| Non-Vegetarian | `NON_VEG` |
+| Jain | `JAIN` |
+| Vegan | `VEGAN` |
+| Custom / Other | `CUSTOM` |
+
+### Outstation guest ratio
+
+Shows the proportion of guests with `isOutstation = true` versus local guests. Useful for planning accommodation and transport logistics.
+
+### RSVP response timeline
+
+A time-series chart showing the cumulative number of RSVP responses received over time, based on `GuestEventInvite.respondedAt` timestamps.
+
+### Pending response tracker
+
+A list of guests whose `rsvpStatus` is still `PENDING` across one or more events. The planner can use this list to trigger targeted reminder blasts.
+
+### Allergy and special dietary guest lists
+
+Guests who have:
+- Set `dietaryPref = CUSTOM`, or
+- Provided a non-empty `dietaryNotes` value
+
+are surfaced in a dedicated list for catering coordination.
+
+## Charts library
+
+Analytics charts are rendered with **Recharts v3**.
+
+## API response structure
+
+Follows the standard JSON envelope:
+
+```json
+{
+  "success": true,
+  "data": {
+    "events": [
+      {
+        "eventId": "...",
+        "name": "Sangeet Night",
+        "confirmed": 85,
+        "pending": 30,
+        "declined": 12
+      }
+    ],
+    "dietary": {
+      "VEG": 90,
+      "NON_VEG": 35,
+      "JAIN": 8,
+      "VEGAN": 4,
+      "CUSTOM": 3
+    },
+    "outstationCount": 42,
+    "totalGuests": 140,
+    "pendingGuests": [...],
+    "specialDietaryGuests": [...]
+  },
+  "error": null
+}
+```

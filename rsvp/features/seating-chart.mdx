@@ -1,0 +1,85 @@
+---
+title: "Seating chart"
+description: "Visual table layout with X/Y positioning, zone-based organisation, and drag-and-drop guest assignment per event."
+---
+
+The seating chart module lets planners arrange tables visually and assign guests to seats for each individual event.
+
+## Planner URL
+
+```
+/weddings/:id/seating
+```
+
+## SeatingTable data model
+
+```prisma
+model SeatingTable {
+  id          String   @id @default(cuid())
+  weddingId   String
+  eventId     String
+  tableNumber Int
+  label       String?  // e.g. "Rose Table", "Table 5"
+  capacity    Int      @default(10)
+  zone        String?  // e.g. "Stage Side", "Entrance", "Garden"
+  positionX   Float?   // for visual seating chart canvas
+  positionY   Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  event          WeddingEvent       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  assignedGuests GuestEventInvite[]
+
+  @@unique([weddingId, eventId, tableNumber])
+  @@map("seating_tables")
+}
+```
+
+### Field reference
+
+| Field | Type | Description |
+|---|---|---|
+| `tableNumber` | `Int` | Numeric identifier, unique per event |
+| `label` | `String?` | Human-readable table name (e.g. "Rose Table") |
+| `capacity` | `Int` | Maximum number of guests (default: 10) |
+| `zone` | `String?` | Named area of the venue (e.g. "Stage Side", "Garden") |
+| `positionX` | `Float?` | Horizontal position on the canvas in pixels |
+| `positionY` | `Float?` | Vertical position on the canvas in pixels |
+
+## Per-event configuration
+
+Seating tables are scoped to a specific `WeddingEvent` via `eventId`. A wedding with five events (Mehendi, Sangeet, Haldi, Ceremony, Reception) requires separate table layouts for each event.
+
+## Guest assignment
+
+Guests are assigned to tables through the `GuestEventInvite.seatingTableId` foreign key:
+
+```prisma
+model GuestEventInvite {
+  // ...
+  seatingTableId String?
+  seatingTable   SeatingTable? @relation(fields: [seatingTableId], references: [id])
+}
+```
+
+Assigning a guest to a table updates this field on their `GuestEventInvite` record for that event.
+
+## Zone-based organisation
+
+The optional `zone` field groups tables into named areas of the venue. Examples:
+
+- `"Stage Side"`
+- `"Entrance"`
+- `"Garden"`
+- `"Balcony"`
+
+## Visual positioning
+
+The `positionX` and `positionY` fields store the table's coordinates on a canvas. The planner dashboard uses these values to render and persist drag-and-drop table positions.
+
+## API endpoints
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/weddings/:id/seating` | Planner | List all seating tables for a wedding |
+| `POST` | `/api/weddings/:id/seating` | Planner | Create a seating table |

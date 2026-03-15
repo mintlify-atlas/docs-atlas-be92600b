@@ -1,0 +1,96 @@
+---
+title: "Webhooks"
+description: "How real-time RSVP updates flow from the RSVP Platform to the CRM via fire-and-forget webhooks, and how to recover from delivery failures."
+---
+
+The webhook system is the real-time data path from the RSVP Platform to the CRM. Every RSVP submission triggers `dispatchRSVPWebhook()` which fires a POST to the registered CRM URL.
+
+## How `dispatchRSVPWebhook()` works
+
+Defined in `RSVP/src/lib/services/webhook.ts`:
+
+1. Looks up `Wedding.crmWebhookUrl` for the wedding.
+2. If the URL is set, POSTs the `RSVPWebhookPayload` with a **5-second timeout** (`AbortSignal.timeout(5000)`).
+3. If the request fails or the CRM returns a non-2xx status, logs the error and continues silently — RSVP submission is never blocked by webhook failure.
+4. Called via `.catch(() => {})` (fire-and-forget) from the RSVP submission handler.
+
+```typescript
+// fire-and-forget from rsvp route handler
+dispatchRSVPWebhook(guest.weddingId, webhookPayload).catch(() => {});
+```
+
+## Webhook registration
+
+Webhook URLs are registered by the CRM when saving integration settings:
+
+```http
+PUT /api/crm/weddings/:rsvpWeddingId/webhook
+Authorization: Bearer <planner.apiKey>
+Content-Type: application/json
+
+{ "webhookUrl": "http://localhost:3001/api/webhooks/rsvp" }
+```
+
+The URL is stored as `Wedding.crmWebhookUrl` on the RSVP Platform. Clear it by passing `null`.
+
+## Webhook receiver
+
+The CRM receives events at `POST /api/webhooks/rsvp`.
+
+### Payload format
+
+```json
+{
+  "type": "rsvp.updated",
+  "weddingId": "clx1abc123",
+  "guestId": "g_1",
+  "guestName": "Rajesh Sharma",
+  "guestPhone": "+919876543210",
+  "responses": [
+    {
+      "eventId": "evt_1",
+      "eventName": "Sangeet Night",
+      "rsvpStatus": "ATTENDING",
+      "plusOneCount": 1,
+      "childrenCount": 0
+    }
+  ],
+  "timestamp": "2026-04-10T14:35:00.000Z"
+}
+```
+
+### CRM upsert logic
+
+On receipt, the CRM:
+
+1. Validates `type === "rsvp.updated"` and that `weddingId` and `guestId` are present.
+2. Finds the CRM wedding with matching `rsvpWeddingId`.
+3. Computes `overallStatus`:
+   - `ATTENDING` if any response is `ATTENDING`
+   - `DECLINED` if all responses are `DECLINED`
+   - `PENDING` otherwise
+4. Upserts the `RSVPGuest` record by `(weddingId, rsvpGuestId)`, updating `name`, `phone`, `overallStatus`, `rsvpData` (JSON string), and `lastSyncedAt`.
+5. Returns `{ received: true }`.
+
+## Recovery from delivery failure
+
+Webhook delivery is best-effort. If the CRM was down or the webhook timed out, the `RSVPGuest` cache may be stale.
+
+Use **Full Sync** to rebuild the cache:
+
+```http
+POST /api/weddings/:id/rsvp/full-sync
+```
+
+This pulls all pages of guest data from the RSVP Platform (`pageSize=100`, up to 10 pages) and upserts every `RSVPGuest` record.
+
+## Security note
+
+<Note>
+  In development, the webhook receiver at `/api/webhooks/rsvp` has **no authentication**. This is safe when both services run on localhost.
+
+  For production deployments, add HMAC-SHA256 signature verification:
+  1. Generate a shared secret.
+  2. On the RSVP Platform side, sign the payload and add it as an `X-RSVP-Signature` header.
+  3. On the CRM side, verify the signature before processing.
+</Note>

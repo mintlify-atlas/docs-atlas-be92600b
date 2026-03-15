@@ -1,0 +1,118 @@
+---
+title: "Response Format"
+description: "Standard JSON envelope used by both the RSVP Platform and the Wedding CRM for all API responses."
+---
+
+Both platforms wrap all API responses in a consistent JSON envelope. This makes it straightforward for clients to handle success and error cases uniformly.
+
+## Success response
+
+```json
+{
+  "success": true,
+  "data": { ... },
+  "error": null,
+  "meta": {
+    "page": 1,
+    "pageSize": 50,
+    "total": 120
+  }
+}
+```
+
+<ResponseField name="success" type="boolean">
+  Always `true` for successful responses.
+</ResponseField>
+
+<ResponseField name="data" type="any">
+  The response payload. May be an object, array, or `null` depending on the endpoint.
+</ResponseField>
+
+<ResponseField name="error" type="null">
+  Always `null` on success.
+</ResponseField>
+
+<ResponseField name="meta" type="object | null">
+  Pagination metadata. Present on list endpoints; `null` on single-resource or action endpoints.
+  <Expandable title="meta fields">
+    <ResponseField name="page" type="number">Current page (1-indexed).</ResponseField>
+    <ResponseField name="pageSize" type="number">Number of items per page.</ResponseField>
+    <ResponseField name="total" type="number">Total count of matching records (for computing total pages).</ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Error response
+
+```json
+{
+  "success": false,
+  "data": null,
+  "error": "Error message here"
+}
+```
+
+<ResponseField name="success" type="boolean">
+  Always `false` for error responses.
+</ResponseField>
+
+<ResponseField name="data" type="null">
+  Always `null` on error.
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Human-readable error message. Returned for all 4xx and 5xx responses.
+</ResponseField>
+
+## HTTP status codes
+
+| Code | Meaning | When used |
+|------|---------|----------|
+| `200 OK` | Success | Successful GET, PATCH, DELETE, and most POST actions |
+| `201 Created` | Resource created | POST endpoints that create a new record |
+| `400 Bad Request` | Invalid input | Missing required fields, invalid values |
+| `401 Unauthorized` | Not authenticated | Missing or invalid session cookie / Bearer token |
+| `403 Forbidden` | Access denied | Valid auth but insufficient permissions (wrong PIN, expired token) |
+| `404 Not Found` | Resource missing | Record not found or ownership mismatch |
+| `409 Conflict` | Duplicate | Unique constraint violation (duplicate phone, wedding code, etc.) |
+| `500 Internal Server Error` | Server error | Unhandled exception |
+| `502 Bad Gateway` | Upstream failure | RSVP Platform returned an error or was unreachable (CRM proxy endpoints) |
+
+## Pagination
+
+List endpoints support page-based pagination:
+
+| Parameter | Default | Max |
+|-----------|---------|-----|
+| `page` | `1` | — |
+| `pageSize` | `50` | `200` (guest list) |
+
+The `meta` object in the response provides `total` so you can compute `totalPages = Math.ceil(total / pageSize)`.
+
+### Example pagination
+
+```bash
+# Page 2, 25 results per page
+curl "http://localhost:3000/api/weddings/clx1abc123/guests?page=2&pageSize=25" \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+```json
+{
+  "success": true,
+  "data": [ ... ],
+  "error": null,
+  "meta": {
+    "page": 2,
+    "pageSize": 25,
+    "total": 150
+  }
+}
+```
+
+With `total: 150` and `pageSize: 25`, there are 6 total pages.
+
+## CRM API differences
+
+<Note>
+  Some CRM endpoints (dashboard, leads, weddings, vendors, checklists, library, portal) were implemented before the standard envelope was adopted and return raw data directly without the `{ success, data, error, meta }` wrapper. The RSVP Platform and all CRM integration endpoints (`/api/weddings/:id/rsvp/*`, `/api/webhooks/rsvp`) consistently use the standard envelope.
+</Note>

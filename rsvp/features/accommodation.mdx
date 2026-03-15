@@ -1,0 +1,92 @@
+---
+title: "Accommodation management"
+description: "Multi-hotel room tracking with occupancy limits, check-in/check-out dates, and guest-to-room assignment."
+---
+
+The accommodation module tracks hotel room allocations for outstation guests attending the wedding.
+
+## Planner URL
+
+```
+/weddings/:id/accommodation
+```
+
+## AccommodationRoom data model
+
+```prisma
+model AccommodationRoom {
+  id           String   @id @default(cuid())
+  weddingId    String
+  hotelName    String
+  roomNumber   String
+  roomType     String   // e.g. "Deluxe", "Suite", "Standard"
+  maxOccupancy Int      @default(2)
+  checkInDate  DateTime
+  checkOutDate DateTime
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  wedding        Wedding @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  assignedGuests Guest[]
+
+  @@unique([weddingId, hotelName, roomNumber])
+  @@map("accommodation_rooms")
+}
+```
+
+### Field reference
+
+| Field | Type | Description |
+|---|---|---|
+| `hotelName` | `String` | Name of the hotel property |
+| `roomNumber` | `String` | Room identifier (e.g. "101", "Suite 2A") |
+| `roomType` | `String` | Room category (e.g. "Deluxe", "Suite", "Standard") |
+| `maxOccupancy` | `Int` | Maximum number of guests per room (default: 2) |
+| `checkInDate` | `DateTime` | Scheduled hotel check-in date and time |
+| `checkOutDate` | `DateTime` | Scheduled hotel check-out date and time |
+| `notes` | `String?` | Optional planner notes about the room |
+
+## Multi-hotel support
+
+A single wedding can have rooms across multiple hotels. Rooms are uniquely identified by the combination of `weddingId`, `hotelName`, and `roomNumber`:
+
+```prisma
+@@unique([weddingId, hotelName, roomNumber])
+```
+
+## Guest-to-room assignment
+
+Guests are linked to rooms via the `Guest.accommodationRoomId` foreign key:
+
+```prisma
+model Guest {
+  // ...
+  accommodationRoomId String?
+  accommodationRoom   AccommodationRoom? @relation(fields: [accommodationRoomId], references: [id])
+}
+```
+
+Multiple guests can be assigned to the same room, up to the `maxOccupancy` limit.
+
+## Room creation (Zod validation)
+
+```typescript
+// accommodationRoomSchema
+{
+  hotelName:    string;  // required
+  roomNumber:   string;  // required
+  roomType:     string;  // required
+  maxOccupancy: number;  // minimum 1, default 2
+  checkInDate:  string;  // ISO 8601 datetime
+  checkOutDate: string;  // ISO 8601 datetime
+  notes?:       string;
+}
+```
+
+## API endpoints
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/weddings/:id/accommodation` | Planner | List all rooms for a wedding |
+| `POST` | `/api/weddings/:id/accommodation` | Planner | Create a room |

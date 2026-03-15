@@ -1,0 +1,172 @@
+---
+title: "Photos"
+description: "Photo wall management for weddings. Supports guest uploads via Cloudinary and planner moderation. Public gallery served at /api/gallery/:weddingCode."
+---
+
+<Note>
+  The planner photo management endpoints require a **NextAuth session cookie**. The `POST /api/weddings/:weddingId/photos` upload endpoint is semi-public — it checks that `photoWallEnabled` is `true` on the wedding. The gallery endpoint is fully public.
+</Note>
+
+## Endpoints
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/api/weddings/:weddingId/photos` | Planner | List photos with moderation status |
+| `POST` | `/api/weddings/:weddingId/photos` | None (wall must be enabled) | Upload a photo |
+| `PATCH` | `/api/weddings/:weddingId/photos/:photoId` | Planner | Approve or reject a photo |
+| `GET` | `/api/gallery/:weddingCode` | None | Public approved-photo gallery |
+
+---
+
+## GET /api/weddings/:weddingId/photos
+
+Returns a paginated list of all photos for the wedding (all statuses). Optionally filtered by status.
+
+### Query parameters
+
+<ParamField query="page" type="number">Page number. Default `1`. Page size is fixed at 50.</ParamField>
+<ParamField query="status" type="string">Filter: `PENDING_REVIEW`, `APPROVED`, or `REJECTED`.</ParamField>
+
+```bash
+curl "http://localhost:3000/api/weddings/clx1abc123/photos?status=PENDING_REVIEW" \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**200 OK**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "photo_1",
+      "weddingId": "clx1abc123",
+      "guestId": "g_1",
+      "imageUrl": "https://res.cloudinary.com/wedtech/image/upload/v1/photo_1.jpg",
+      "thumbnailUrl": "https://res.cloudinary.com/.../thumb_photo_1.jpg",
+      "caption": "Beautiful venue!",
+      "status": "PENDING_REVIEW",
+      "createdAt": "2026-05-15T20:10:00.000Z",
+      "guest": { "id": "g_1", "name": "Rajesh Sharma" }
+    }
+  ],
+  "error": null,
+  "meta": { "page": 1, "pageSize": 50, "total": 14 }
+}
+```
+
+---
+
+## POST /api/weddings/:weddingId/photos
+
+Uploads a photo. The client must upload to Cloudinary directly and pass the resulting URL. The photo is created with status `PENDING_REVIEW`.
+
+<Note>
+  Requires `photoWallEnabled: true` on the wedding. If the guest's token is supplied, the upload is attributed to that guest.
+</Note>
+
+### Request body
+
+<ParamField body="imageUrl" type="string" required>
+  Cloudinary image URL.
+</ParamField>
+
+<ParamField body="thumbnailUrl" type="string">
+  Cloudinary thumbnail URL.
+</ParamField>
+
+<ParamField body="caption" type="string">
+  Optional photo caption.
+</ParamField>
+
+<ParamField body="guestToken" type="string">
+  Guest token to attribute the upload to a guest. If omitted, the photo is attributed to the planner.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3000/api/weddings/clx1abc123/photos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "imageUrl": "https://res.cloudinary.com/wedtech/image/upload/v1/photo_1.jpg",
+    "thumbnailUrl": "https://res.cloudinary.com/wedtech/image/upload/c_thumb,w_200/v1/photo_1.jpg",
+    "caption": "Beautiful venue!",
+    "guestToken": "clx_guest_token_abc"
+  }'
+```
+
+**201 Created** — returns the photo record with `status: PENDING_REVIEW`.
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 400 | `"Image URL is required"` |
+| 403 | `"Photo wall is not enabled for this wedding"` |
+| 404 | `"Wedding not found"` |
+
+---
+
+## PATCH /api/weddings/:weddingId/photos/:photoId
+
+Approves or rejects a photo. Only the `status` field is updated.
+
+<ParamField body="status" type="string" required>
+  `APPROVED` or `REJECTED`.
+</ParamField>
+
+```bash
+curl -X PATCH http://localhost:3000/api/weddings/clx1abc123/photos/photo_1 \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{"status": "APPROVED"}'
+```
+
+---
+
+## GET /api/gallery/:weddingCode
+
+Public endpoint returning all `APPROVED` photos for the wedding. Only available when `photoWallEnabled` is `true`. Page size is fixed at 30.
+
+### Query parameters
+
+<ParamField query="page" type="number">Page number. Default `1`.</ParamField>
+
+```bash
+curl "http://localhost:3000/api/gallery/ananya-rohan-2026?page=1"
+```
+
+**200 OK**
+```json
+{
+  "success": true,
+  "data": {
+    "wedding": {
+      "brideName": "Ananya",
+      "groomName": "Rohan",
+      "primaryColorHex": "#B8860B",
+      "secondaryColorHex": "#800020"
+    },
+    "photos": [
+      {
+        "id": "photo_2",
+        "imageUrl": "https://res.cloudinary.com/...",
+        "thumbnailUrl": "https://res.cloudinary.com/...",
+        "caption": "First dance!",
+        "createdAt": "2026-05-15T21:30:00.000Z",
+        "guest": { "name": "Priya Verma" }
+      }
+    ],
+    "total": 28,
+    "page": 1,
+    "pageSize": 30
+  },
+  "error": null,
+  "meta": null
+}
+```
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 403 | `"Photo gallery is not available"` |
+| 404 | `"Wedding not found"` |

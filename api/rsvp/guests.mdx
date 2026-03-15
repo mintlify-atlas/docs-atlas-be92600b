@@ -1,0 +1,377 @@
+---
+title: "Guests"
+description: "Manage guests on the RSVP Platform, including planner CRUD, CSV import, and the token-based guest self-service portal."
+---
+
+<Note>
+  Planner endpoints require a **NextAuth session cookie**. Guest self-service endpoints (`/api/guests/:guestToken`) are **public** — the guest token in the URL path acts as authentication.
+</Note>
+
+## Endpoints
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/api/weddings/:weddingId/guests` | Planner | Paginated + filtered guest list |
+| `POST` | `/api/weddings/:weddingId/guests` | Planner | Add a single guest |
+| `GET` | `/api/weddings/:weddingId/guests/:guestId` | Planner | Full guest profile |
+| `PATCH` | `/api/weddings/:weddingId/guests/:guestId` | Planner | Update guest |
+| `DELETE` | `/api/weddings/:weddingId/guests/:guestId` | Planner | Delete guest |
+| `PUT` | `/api/weddings/:weddingId/guests/:guestId/events` | Planner | Replace event assignments |
+| `POST` | `/api/weddings/:weddingId/guests/import` | Planner | CSV bulk import |
+| `GET` | `/api/guests/:guestToken` | Token | Guest portal data |
+| `POST` | `/api/guests/:guestToken/rsvp` | Token | Submit RSVP |
+
+---
+
+## GET /api/weddings/:weddingId/guests
+
+Returns a paginated, filterable list of guests. VIP guests are sorted first, then alphabetically.
+
+### Query parameters
+
+<ParamField query="page" type="number">
+  Page number. Default `1`.
+</ParamField>
+
+<ParamField query="pageSize" type="number">
+  Results per page. Default `50`, max `200`.
+</ParamField>
+
+<ParamField query="search" type="string">
+  Searches `name`, `phone`, and `email` (case-insensitive).
+</ParamField>
+
+<ParamField query="side" type="string">
+  Filter by relationship side: `BRIDE`, `GROOM`, or `MUTUAL`.
+</ParamField>
+
+<ParamField query="group" type="string">
+  Filter by `groupTag` (e.g. `"Family"`).
+</ParamField>
+
+<ParamField query="rsvpStatus" type="string">
+  Filter by RSVP status: `PENDING`, `ATTENDING`, or `DECLINED`.
+</ParamField>
+
+<ParamField query="eventId" type="string">
+  Filter guests invited to a specific event.
+</ParamField>
+
+<ParamField query="isVip" type="string">
+  `"true"` to show only VIP guests.
+</ParamField>
+
+<ParamField query="isOutstation" type="string">
+  `"true"` to show only outstation guests.
+</ParamField>
+
+<ParamField query="dietary" type="string">
+  Filter by dietary preference: `VEG`, `NON_VEG`, `JAIN`, `VEGAN`, `CUSTOM`.
+</ParamField>
+
+<ParamField query="noAccommodation" type="string">
+  `"true"` to show outstation guests without assigned accommodation.
+</ParamField>
+
+```bash
+curl "http://localhost:3000/api/weddings/clx1abc123/guests?page=1&search=sharma&isVip=true" \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**200 OK**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "g_1",
+      "name": "Rajesh Sharma",
+      "phone": "+919876543210",
+      "email": "rajesh@email.com",
+      "relationshipSide": "BRIDE",
+      "groupTag": "Family",
+      "isVip": true,
+      "isOutstation": true,
+      "dietaryPref": "VEG",
+      "dietaryNotes": null,
+      "plusOneAllowed": true,
+      "token": "clx_guest_token_abc",
+      "eventInvites": [ ... ],
+      "accommodationRoom": null,
+      "plusOnes": []
+    }
+  ],
+  "error": null,
+  "meta": { "page": 1, "pageSize": 50, "total": 3 }
+}
+```
+
+---
+
+## POST /api/weddings/:weddingId/guests
+
+Adds a single guest. Phone is formatted to `+91` Indian standard. Deduplicates by phone per wedding.
+
+### Request body
+
+<ParamField body="name" type="string" required>
+  Guest full name.
+</ParamField>
+
+<ParamField body="phone" type="string" required>
+  10-digit Indian mobile number (starting with 6/7/8/9). Auto-formatted to `+91` prefix.
+</ParamField>
+
+<ParamField body="email" type="string">
+  Guest email address.
+</ParamField>
+
+<ParamField body="relationshipSide" type="string">
+  `BRIDE`, `GROOM`, or `MUTUAL`. Defaults to `MUTUAL`.
+</ParamField>
+
+<ParamField body="groupTag" type="string">
+  Group label (e.g. `"College Friends"`, `"Family"`).
+</ParamField>
+
+<ParamField body="isVip" type="boolean">
+  Mark as VIP. Defaults to `false`.
+</ParamField>
+
+<ParamField body="isOutstation" type="boolean">
+  Travelling from out of town. Defaults to `false`.
+</ParamField>
+
+<ParamField body="dietaryPref" type="string">
+  `VEG`, `NON_VEG`, `JAIN`, `VEGAN`, or `CUSTOM`. Defaults to `VEG`.
+</ParamField>
+
+<ParamField body="dietaryNotes" type="string">
+  Free-text allergy or custom diet notes.
+</ParamField>
+
+<ParamField body="plusOneAllowed" type="boolean">
+  Whether guest may bring a plus-one. Defaults to `false`.
+</ParamField>
+
+<ParamField body="eventIds" type="array">
+  Array of event IDs to invite this guest to immediately.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3000/api/weddings/clx1abc123/guests \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{
+    "name": "Rajesh Sharma",
+    "phone": "9876543210",
+    "relationshipSide": "BRIDE",
+    "groupTag": "Family",
+    "isVip": true,
+    "isOutstation": true,
+    "eventIds": ["evt_1", "evt_2"]
+  }'
+```
+
+**201 Created** — returns full guest record with `eventInvites`.
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 400 | `"Guest name and phone are required"` |
+| 409 | `"A guest with phone +91... already exists"` |
+
+---
+
+## GET /api/weddings/:weddingId/guests/:guestId
+
+Returns the full guest profile including event invites with seating, accommodation room, plus-ones, check-in records, and the last 20 communication logs.
+
+```bash
+curl http://localhost:3000/api/weddings/clx1abc123/guests/g_1 \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+---
+
+## PATCH /api/weddings/:weddingId/guests/:guestId
+
+Partially updates a guest. If `phone` is changed, checks for duplicate before updating.
+
+<ParamField body="name" type="string">Updated name</ParamField>
+<ParamField body="phone" type="string">Updated phone (re-formatted)</ParamField>
+<ParamField body="email" type="string">Email or `null`</ParamField>
+<ParamField body="relationshipSide" type="string">`BRIDE`, `GROOM`, or `MUTUAL`</ParamField>
+<ParamField body="groupTag" type="string">Group label or `null`</ParamField>
+<ParamField body="isVip" type="boolean">VIP flag</ParamField>
+<ParamField body="isOutstation" type="boolean">Outstation flag</ParamField>
+<ParamField body="dietaryPref" type="string">Dietary preference</ParamField>
+<ParamField body="dietaryNotes" type="string">Free-text notes or `null`</ParamField>
+<ParamField body="plusOneAllowed" type="boolean">Plus-one permission</ParamField>
+<ParamField body="accommodationRoomId" type="string">Assign to a room ID, or `null` to unassign</ParamField>
+
+```bash
+curl -X PATCH http://localhost:3000/api/weddings/clx1abc123/guests/g_1 \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{"isVip": true, "dietaryPref": "JAIN"}'
+```
+
+---
+
+## DELETE /api/weddings/:weddingId/guests/:guestId
+
+Deletes the guest and cascade-deletes event invites, check-ins, communication logs, and plus-one records.
+
+```bash
+curl -X DELETE http://localhost:3000/api/weddings/clx1abc123/guests/g_1 \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+---
+
+## PUT /api/weddings/:weddingId/guests/:guestId/events
+
+Replaces the full set of event assignments for a guest. All existing invites are removed and the new set is created.
+
+<ParamField body="eventIds" type="array" required>
+  Array of event ID strings to assign the guest to.
+</ParamField>
+
+```bash
+curl -X PUT http://localhost:3000/api/weddings/clx1abc123/guests/g_1/events \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{"eventIds": ["evt_1", "evt_3"]}'
+```
+
+---
+
+## POST /api/weddings/:weddingId/guests/import
+
+Bulk imports guests from a CSV file using multipart form data. Supports flexible column naming (case-insensitive).
+
+### CSV format
+
+```csv
+Name,Phone,Email,Side,Group,Events,VIP,Outstation,Diet,Plus One
+Rajesh Sharma,9876543210,rajesh@email.com,Bride,Family,"Mehendi,Reception",Yes,No,Vegetarian,No
+```
+
+| Column | Required | Accepted values |
+|--------|----------|-----------------|
+| Name | Yes | Any string |
+| Phone | Yes | 10-digit Indian mobile |
+| Email | No | Valid email |
+| Side | No | Bride, Groom, Mutual |
+| Group | No | Any string |
+| Events | No | Comma-separated event names |
+| VIP | No | Yes/No/True/False/1/0 |
+| Outstation | No | Yes/No/True/False/1/0 |
+| Diet / Dietary | No | Vegetarian, Non-Vegetarian, Jain, Vegan, Custom |
+| Plus One | No | Yes/No/True/False/1/0 |
+
+```bash
+curl -X POST http://localhost:3000/api/weddings/clx1abc123/guests/import \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -F "file=@guests.csv"
+```
+
+**200 OK**
+```json
+{
+  "success": true,
+  "data": { "created": 45, "skipped": 2, "errors": [] },
+  "error": null,
+  "meta": null
+}
+```
+
+---
+
+## GET /api/guests/:guestToken
+
+Public endpoint — the guest token in the URL is the sole authentication. Returns complete portal data: guest details, all event invites with RSVP status, seating assignment, accommodation room, plus-ones, and wedding branding.
+
+```bash
+curl http://localhost:3000/api/guests/clx_guest_token_abc
+```
+
+**200 OK** — returns full `Guest` object with nested `wedding`, `eventInvites`, `accommodationRoom`, and `plusOnes`.
+
+| Status | Error |
+|--------|-------|
+| 404 | `"Invalid invite link"` |
+
+---
+
+## POST /api/guests/:guestToken/rsvp
+
+Submits RSVP responses for one or more events. Fires `dispatchRSVPWebhook()` to the CRM after successful responses. Enforces a 48-hour cutoff — once a guest has responded to an event, changes are blocked within 48 hours of the event date.
+
+### Request body
+
+<ParamField body="responses" type="array" required>
+  Array of per-event response objects:
+  - `eventId` (string, required) — ID of the event
+  - `rsvpStatus` (string, required) — `ATTENDING` or `DECLINED`
+  - `plusOneCount` (number) — `0` or `1`
+  - `plusOneName` (string) — name of plus-one if attending
+  - `plusOneDietaryPref` (string) — dietary preference of plus-one
+  - `childrenCount` (number) — number of children attending
+  - `specialNotes` (string) — free-text notes
+</ParamField>
+
+<ParamField body="dietaryPref" type="string">
+  Update guest dietary preference: `VEG`, `NON_VEG`, `JAIN`, `VEGAN`, `CUSTOM`.
+</ParamField>
+
+<ParamField body="dietaryNotes" type="string">
+  Update free-text dietary notes.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3000/api/guests/clx_guest_token_abc/rsvp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dietaryPref": "JAIN",
+    "responses": [
+      {
+        "eventId": "evt_1",
+        "rsvpStatus": "ATTENDING",
+        "plusOneCount": 1,
+        "plusOneName": "Meena Sharma",
+        "plusOneDietaryPref": "VEG"
+      },
+      {
+        "eventId": "evt_2",
+        "rsvpStatus": "DECLINED"
+      }
+    ]
+  }'
+```
+
+**200 OK**
+```json
+{
+  "success": true,
+  "data": {
+    "results": [
+      { "eventId": "evt_1", "eventName": "Sangeet Night", "rsvpStatus": "ATTENDING", "plusOneCount": 1, "childrenCount": 0, "success": true },
+      { "eventId": "evt_2", "eventName": "Reception", "rsvpStatus": "DECLINED", "plusOneCount": 0, "childrenCount": 0, "success": true }
+    ]
+  },
+  "error": null,
+  "meta": null
+}
+```
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 400 | `"At least one event response is required"` |
+| 404 | `"Invalid guest token"` |
+| Per-event error | `"Cannot change RSVP within 48 hours of the event"` |
+| Per-event error | `"Not invited to this event"` |

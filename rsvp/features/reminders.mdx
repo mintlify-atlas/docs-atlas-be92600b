@@ -1,0 +1,173 @@
+---
+title: "Reminder engine"
+description: "Multi-channel reminder scheduling (WhatsApp, SMS, Email) with configurable day offsets, template variables, and BullMQ background processing."
+---
+
+The reminder engine sends automated messages to guests who have not yet responded. Reminders are processed asynchronously via BullMQ and Redis.
+
+## Planner URL
+
+```
+/weddings/:id/reminders
+```
+
+## MessageChannel enum
+
+| Value | Description |
+|---|---|
+| `WHATSAPP` | WhatsApp message via Twilio |
+| `SMS` | SMS via Twilio or MSG91 |
+| `EMAIL` | Email via SMTP (SendGrid or custom) |
+
+## MessageStatus enum
+
+| Value | Description |
+|---|---|
+| `QUEUED` | Job added to BullMQ queue, not yet sent |
+| `SENT` | Dispatched to provider |
+| `DELIVERED` | Confirmed delivery by provider |
+| `READ` | Read receipt received (WhatsApp only) |
+| `FAILED` | Delivery failed |
+
+## Reminder schedules
+
+Each `ReminderSchedule` defines a trigger rule for a wedding:
+
+```prisma
+model ReminderSchedule {
+  id        String         @id @default(cuid())
+  weddingId String
+  dayOffset Int            // days after invite sent (1, 3, 6, etc.)
+  channel   MessageChannel
+  template  String         @db.Text  // editable message template
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([weddingId, dayOffset, channel])
+  @@map("reminder_schedules")
+}
+```
+
+### Creating a schedule (Zod validation)
+
+```typescript
+// reminderScheduleSchema
+{
+  dayOffset: number;                          // minimum 1
+  channel: "WHATSAPP" | "SMS" | "EMAIL";
+  template: string;                           // required
+  isActive: boolean;                          // default: true
+}
+```
+
+## Template variables
+
+Templates support the following interpolation variables:
+
+| Variable | Replaced with |
+|---|---|
+| `{guest_name}` | Guest's full name |
+| `{event_name}` | Name of the wedding event |
+| `{event_date}` | Formatted event date |
+| `{rsvp_link}` | Full URL to the guest's RSVP portal |
+
+Example template:
+
+```
+Dear {guest_name}, you are invited to {event_name} on {event_date}. Please RSVP here: {rsvp_link}
+```
+
+## Bulk reminder blast
+
+The planner can trigger an immediate reminder to all guests with `rsvpStatus = PENDING` via:
+
+```
+POST /api/weddings/:id/reminders/send
+```
+
+This enqueues one job per pending guest per active schedule channel.
+
+## Communication log
+
+Every message sent is recorded in `CommunicationLog`:
+
+```prisma
+model CommunicationLog {
+  id        String         @id @default(cuid())
+  guestId   String
+  channel   MessageChannel
+  content   String         @db.Text
+  status    MessageStatus  @default(QUEUED)
+  sentAt    DateTime?
+  metadata  Json?          // provider response, message IDs, etc.
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+```
+
+## Background job processing
+
+Reminders are processed using **BullMQ** backed by **Redis** (`ioredis`). The queue is configured via the `REDIS_URL` environment variable.
+
+```bash
+REDIS_URL=redis://localhost:6379
+```
+
+<Note>
+  If `REDIS_URL` is not set, reminder scheduling is unavailable. The bulk blast endpoint will return an error.
+</Note>
+
+## Provider configuration
+
+<Tabs>
+  <Tab title="Twilio (WhatsApp & SMS)">
+    ```bash
+    TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    TWILIO_AUTH_TOKEN=your_auth_token
+    TWILIO_PHONE_NUMBER=+14155238886
+    ```
+    Used for both `WHATSAPP` and `SMS` channels.
+  </Tab>
+  <Tab title="MSG91 (SMS, India)">
+    ```bash
+    MSG91_AUTH_KEY=your_msg91_auth_key
+    MSG91_SENDER_ID=WEDTCH
+    ```
+    Indian SMS gateway, recommended for high-volume domestic delivery.
+  </Tab>
+  <Tab title="SMTP (Email)">
+    ```bash
+    SMTP_HOST=smtp.sendgrid.net
+    SMTP_PORT=587
+    SMTP_USER=apikey
+    SMTP_PASS=your_sendgrid_api_key
+    EMAIL_FROM=noreply@wedtech.events
+    ```
+    Defaults to SendGrid SMTP. Any SMTP-compatible provider works.
+  </Tab>
+</Tabs>
+
+## Environment variables summary
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `REDIS_URL` | No | — | Redis connection URL for BullMQ |
+| `TWILIO_ACCOUNT_SID` | No | — | Twilio account SID |
+| `TWILIO_AUTH_TOKEN` | No | — | Twilio authentication token |
+| `TWILIO_PHONE_NUMBER` | No | — | Twilio sender phone number |
+| `MSG91_AUTH_KEY` | No | — | MSG91 authentication key |
+| `MSG91_SENDER_ID` | No | — | MSG91 sender ID |
+| `SMTP_HOST` | No | `smtp.sendgrid.net` | SMTP server host |
+| `SMTP_PORT` | No | `587` | SMTP server port |
+| `SMTP_USER` | No | — | SMTP username |
+| `SMTP_PASS` | No | — | SMTP password |
+| `EMAIL_FROM` | No | `noreply@wedtech.events` | Sender email address |
+
+## API endpoints
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/weddings/:id/reminders` | Planner | List reminder schedules |
+| `POST` | `/api/weddings/:id/reminders` | Planner | Create a reminder schedule |
+| `POST` | `/api/weddings/:id/reminders/send` | Planner | Blast reminders to all pending guests |

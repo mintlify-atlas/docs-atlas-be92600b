@@ -1,0 +1,64 @@
+---
+title: "Authentication"
+description: "NextAuth v4 authentication handler for the Wedding CRM."
+---
+
+<Note>
+  The CRM uses **NextAuth v4** with the `credentials` provider. All protected CRM routes require an active session cookie (`next-auth.session-token`).
+</Note>
+
+## Endpoints
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET/POST` | `/api/auth/[...nextauth]` | Public | NextAuth login / logout / session |
+
+---
+
+## GET/POST /api/auth/[...nextauth]
+
+Standard NextAuth v4 catch-all route for the CRM. Handles:
+
+- `POST /api/auth/signin/credentials` — email + password login
+- `GET /api/auth/session` — active session data
+- `GET /api/auth/signout` / `POST /api/auth/signout` — sign out
+- `GET /api/auth/csrf` — CSRF token for form submissions
+
+Configured with the `credentials` provider. Passwords are hashed with bcrypt and compared against the `users` table.
+
+### Demo credentials
+
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | `admin@wedcrm.com` | `admin123` |
+| Relationship Manager | `anjali@wedcrm.com` | `admin123` |
+| Relationship Manager | `rohit@wedcrm.com` | `admin123` |
+| Vendor Coordinator | `meera@wedcrm.com` | `admin123` |
+
+```bash
+# Get current session
+curl http://localhost:3001/api/auth/session \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**Session response**
+```json
+{
+  "user": {
+    "id": "usr_1",
+    "name": "Admin",
+    "email": "admin@wedcrm.com",
+    "role": "ADMIN"
+  },
+  "expires": "2026-04-15T10:00:00.000Z"
+}
+```
+
+### User roles
+
+| Role | Description |
+|------|-------------|
+| `ADMIN` | Full access to all CRM features |
+| `RELATIONSHIP_MANAGER` | Manages assigned weddings and leads |
+| `VENDOR_COORDINATOR` | Manages vendor records and follow-ups |
+| `CLIENT` | Read-only client portal access |

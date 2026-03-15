@@ -1,0 +1,80 @@
+---
+title: "WedTech Solutions"
+description: "A comprehensive wedding technology suite — Wedding CRM for planners and RSVP Platform for guest management, connected by real-time webhooks."
+---
+
+# WedTech Solutions
+
+WedTech Solutions is a full-stack wedding technology platform built for professional wedding planners. It consists of two tightly integrated products:
+
+<CardGroup cols={2}>
+  <Card title="Wedding CRM" icon="briefcase" href="/crm/overview">
+    A complete CRM for managing leads, weddings, vendors, checklists, client portals, and RSVP integration — all in one place.
+  </Card>
+  <Card title="RSVP Platform" icon="envelope" href="/rsvp/overview">
+    A guest-facing RSVP management system with digital invites, QR check-in, seating charts, photo walls, and multi-channel reminders.
+  </Card>
+</CardGroup>
+
+## How the two products work together
+
+The CRM and RSVP Platform communicate bidirectionally: the CRM pushes guest lists to the RSVP Platform and pulls live headcounts and RSVP status back. Whenever a guest submits an RSVP, the RSVP Platform fires a real-time webhook to the CRM so the planner always has up-to-date data — even across disconnected systems.
+
+```
+CRM (Port 3001) ◄──────── Webhooks ────────► RSVP Platform (Port 3000)
+     │                                               │
+     └──── REST API proxy ───────────────────────────┘
+```
+
+## Key capabilities
+
+<CardGroup cols={2}>
+  <Card title="Lead Pipeline" icon="filter" href="/crm/modules/lead-pipeline">
+    Kanban board with 7 stages from New to Won/Lost, with one-click lead-to-wedding conversion.
+  </Card>
+  <Card title="Guest Management" icon="users" href="/rsvp/features/guest-management">
+    Bulk CSV import, deduplication by phone, VIP flags, dietary tracking, and relationship-side assignment.
+  </Card>
+  <Card title="Digital Invitations" icon="paper-plane" href="/rsvp/features/digital-invitations">
+    5 themes × 9 languages with animated options and per-event customization.
+  </Card>
+  <Card title="Event-Day Check-In" icon="qrcode" href="/rsvp/features/checkin">
+    QR code check-in with HMAC-SHA256 verification and PIN-protected stations.
+  </Card>
+  <Card title="Multi-Channel Reminders" icon="bell" href="/rsvp/features/reminders">
+    WhatsApp, SMS, and email reminders via BullMQ + Redis with configurable schedules.
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/integration/overview">
+    61 REST endpoints across both platforms with a consistent JSON envelope.
+  </Card>
+</CardGroup>
+
+## Tech stack at a glance
+
+| Layer | CRM | RSVP Platform |
+|---|---|---|
+| Framework | Next.js 16 (App Router) | Next.js 16 (App Router) |
+| Language | TypeScript 5 | TypeScript 5 |
+| Database | SQLite via LibSQL + Prisma | PostgreSQL via Prisma |
+| Auth | NextAuth v4 (JWT) | NextAuth v4 (JWT) |
+| Styling | Tailwind CSS v4 | Tailwind CSS v4 + shadcn/ui |
+| Job Queue | — | BullMQ + Redis |
+| Messaging | — | Twilio + MSG91 + Nodemailer |
+| Images | — | Cloudinary |
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get both products running locally in under 10 minutes.
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/architecture">
+    Understand how the CRM and RSVP Platform communicate.
+  </Card>
+  <Card title="Environment variables" icon="sliders" href="/configuration/environment-variables">
+    Configure databases, auth, messaging, and storage.
+  </Card>
+  <Card title="Database setup" icon="database" href="/configuration/database-setup">
+    Set up SQLite for the CRM and PostgreSQL for the RSVP Platform.
+  </Card>
+</CardGroup>

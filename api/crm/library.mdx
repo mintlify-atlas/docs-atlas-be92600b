@@ -1,0 +1,131 @@
+---
+title: "Data Library"
+description: "Manage the centralized knowledge base with venue info, pricing guides, vendor guides, contract templates, and more."
+---
+
+<Note>
+  All endpoints require a **NextAuth session cookie**.
+</Note>
+
+## Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/library` | List library items with optional filters |
+| `POST` | `/api/library` | Create a library item |
+| `PUT` | `/api/library/:id` | Update a library item |
+| `DELETE` | `/api/library/:id` | Delete a library item |
+
+---
+
+## GET /api/library
+
+Returns all library items ordered by `createdAt` descending.
+
+### Query parameters
+
+<ParamField query="category" type="string">
+  Filter by category: `Venue Info`, `Pricing Guide`, `Checklist Template`, `Vendor Guide`, `Trend`, `FAQ`, `Inspiration`, `Contract Template`, `Policy`.
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search across `title`, `tags`, and `content`.
+</ParamField>
+
+```bash
+curl "http://localhost:3001/api/library?category=Pricing+Guide" \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**200 OK**
+```json
+[
+  {
+    "id": "lib_1",
+    "title": "Mumbai Venue Pricing Guide 2026",
+    "category": "Pricing Guide",
+    "content": "Comprehensive pricing for 50+ Mumbai venues...",
+    "tags": "mumbai,venues,pricing,2026",
+    "fileUrl": null,
+    "fileType": null,
+    "isPublic": true,
+    "createdAt": "2026-02-01T09:00:00.000Z",
+    "updatedAt": "2026-02-10T14:00:00.000Z"
+  }
+]
+```
+
+---
+
+## POST /api/library
+
+Creates a new library item.
+
+### Request body
+
+<ParamField body="title" type="string" required>
+  Item title.
+</ParamField>
+
+<ParamField body="category" type="string" required>
+  One of the 9 supported categories.
+</ParamField>
+
+<ParamField body="content" type="string">
+  Body content or description.
+</ParamField>
+
+<ParamField body="tags" type="string">
+  Comma-separated searchable tags.
+</ParamField>
+
+<ParamField body="fileUrl" type="string">
+  URL of an attached file.
+</ParamField>
+
+<ParamField body="fileType" type="string">
+  MIME type or extension of the attached file.
+</ParamField>
+
+<ParamField body="isPublic" type="boolean">
+  Whether the item is publicly visible in the client portal. Defaults to `false`.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3001/api/library \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{
+    "title": "Standard Vendor Contract Template",
+    "category": "Contract Template",
+    "content": "This agreement is between...",
+    "tags": "contract,vendor,legal",
+    "isPublic": false
+  }'
+```
+
+**201 Created** — returns the new `DataLibraryItem` record.
+
+---
+
+## PUT /api/library/:id
+
+Updates all fields of a library item.
+
+```bash
+curl -X PUT http://localhost:3001/api/library/lib_1 \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{"isPublic": true, "tags": "mumbai,venues,pricing,2026,updated"}'
+```
+
+---
+
+## DELETE /api/library/:id
+
+Permanently deletes the library item.
+
+```bash
+curl -X DELETE http://localhost:3001/api/library/lib_1 \
+  -H "Cookie: next-auth.session-token=<token>"
+```

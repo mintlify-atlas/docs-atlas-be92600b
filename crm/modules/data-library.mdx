@@ -1,0 +1,78 @@
+---
+title: "Data library"
+description: "Centralised knowledge base for wedding planning resources, guides, contracts, and inspiration."
+---
+
+The data library at `/library` is a shared knowledge base for the planning team. Items are organised by category and are searchable by title, content, and tags. Each item can be marked **public** to make it visible in the client portal.
+
+## Categories
+
+Every library item belongs to one of 9 categories:
+
+| Category value | Display label | Colour |
+| --- | --- | --- |
+| `VENUE_INFO` | Venue Info | Blue |
+| `PRICING_GUIDE` | Pricing Guide | Green |
+| `CHECKLIST_TEMPLATE` | Checklist Template | Purple |
+| `VENDOR_GUIDE` | Vendor Guide | Amber |
+| `TREND` | Trend | Pink |
+| `FAQ` | FAQ | Indigo |
+| `INSPIRATION` | Inspiration | Rose |
+| `CONTRACT_TEMPLATE` | Contract Template | Gray |
+| `POLICY` | Policy | Red |
+
+## Item fields
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `title` | String | Display name of the item |
+| `content` | String? | Rich text body |
+| `category` | String | One of the 9 category values |
+| `tags` | String? | Comma-separated tags for search |
+| `fileUrl` | String? | URL of an attached file |
+| `fileType` | String? | MIME type of the attached file |
+| `isPublic` | Boolean | When `true`, visible in the client portal |
+
+## Searching and filtering
+
+The library page supports:
+
+- **Full-text search** across `title` and `content` via the search bar.
+- **Category filter** via the dropdown (defaults to all categories).
+
+Tags are stored as a comma-separated string (e.g., `venue, delhi, premium`) and rendered as pill badges on each card.
+
+## Public vs private items
+
+- **Private** items (default) are visible only to logged-in CRM users.
+- **Public** items are surfaced in the client portal when a client's access permissions include the relevant section.
+
+Toggle visibility with the **Make visible in Client Portal** checkbox when adding or editing an item.
+
+## File attachments
+
+File metadata (`fileUrl`, `fileType`) is stored on the `DataLibraryItem` record. Upload and CDN hosting are handled separately; the library stores the resulting URL.
+
+## API reference
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/api/library` | List items with optional `search` and `category` filters |
+| `POST` | `/api/library` | Create a library item |
+| `PUT` | `/api/library/:id` | Update a library item |
+| `DELETE` | `/api/library/:id` | Delete a library item |
+
+### Create a library item
+
+```bash
+POST /api/library
+Content-Type: application/json
+
+{
+  "title": "Premium Venue Guide — Delhi NCR",
+  "category": "VENUE_INFO",
+  "content": "A curated list of premium venues in Delhi NCR with pricing and capacity...",
+  "tags": "venue, delhi, premium",
+  "isPublic": true
+}
+```

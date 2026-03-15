@@ -1,0 +1,93 @@
+---
+title: "Client portal"
+description: "Token-based client access with configurable permissions and shareable links — no login required for clients."
+---
+
+The client portal gives wedding clients a read-only view of their wedding progress without requiring a CRM login. Each access link contains a unique token. Planners manage access from the `/portal` page.
+
+## How it works
+
+- A planner creates an access link for a specific wedding and client email.
+- The CRM generates a `crypto.randomUUID()` access token and stores it on a `ClientPortalAccess` record.
+- The client opens `http://localhost:3001/client/<token>` — no password needed.
+- The portal page fetches wedding data filtered to the permissions granted on that token.
+
+## Demo portal
+
+A pre-seeded portal is available at:
+
+```
+http://localhost:3001/client/demo-portal-token-kabir
+```
+
+## Configurable permissions
+
+Each access link has an independent set of permissions stored as a comma-separated string:
+
+| Permission value | What the client can see |
+| --- | --- |
+| `VIEW_TIMELINE` | Wedding functions and their statuses (default) |
+| `VIEW_CHECKLIST` | Applied checklists with completion progress (default) |
+| `VIEW_VENDORS` | Vendor assignments and statuses |
+| `VIEW_PAYMENTS` | Payment schedule and statuses |
+
+The default permissions for a new access link are `VIEW_TIMELINE,VIEW_CHECKLIST`.
+
+## Generating an access link
+
+<Steps>
+  <Step title="Open the portal page">
+    Navigate to `/portal` in the CRM dashboard.
+  </Step>
+  <Step title="Click Create Access Link">
+    Click **Create Access Link** in the top-right corner.
+  </Step>
+  <Step title="Fill in the modal">
+    Select the wedding, enter the client name and email, and tick the permissions you want to grant.
+  </Step>
+  <Step title="Create and copy">
+    Click **Create Access** to generate the link. The new entry appears in the list with a **Copy Link** button.
+  </Step>
+  <Step title="Share with the client">
+    Paste the copied URL into an email or WhatsApp message. The client opens it directly in their browser.
+  </Step>
+</Steps>
+
+## Activity tracking
+
+Each `ClientPortalAccess` record stores a `lastAccessed` timestamp that is updated every time the portal token is loaded. This is displayed in the portal management list so planners know when a client last viewed their portal.
+
+## Portal page content
+
+The client portal at `/client/[token]` renders:
+
+- **Header card** — client name, wedding date, venue, and days-until countdown.
+- **Wedding timeline** — list of functions with status badges (if `VIEW_TIMELINE` is granted).
+- **Checklists** — checklist progress bars and item-level completion (if `VIEW_CHECKLIST` is granted).
+- **Vendors** — vendor assignment list with statuses (if `VIEW_VENDORS` is granted).
+
+## API reference
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/api/portal` | List all client portal access records |
+| `POST` | `/api/portal` | Create a new access link |
+| `GET` | `/api/portal/:token` | Fetch portal data for a given token (used by the client page) |
+
+### Create an access link
+
+```bash
+POST /api/portal
+Content-Type: application/json
+
+{
+  "weddingId": "<wedding-cuid>",
+  "clientName": "Kabir Singh",
+  "clientEmail": "kabir@example.com",
+  "permissions": "VIEW_TIMELINE,VIEW_CHECKLIST,VIEW_VENDORS"
+}
+```
+
+<Note>
+If no `User` record exists for the client email, one is auto-created with the role `CLIENT` and a default password of `client123`. This user record is not used for CRM login — it only links the portal access to an identity.
+</Note>

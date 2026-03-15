@@ -1,0 +1,163 @@
+---
+title: "Reminders"
+description: "Configure reminder schedules and blast messages to pending guests via WhatsApp, SMS, or Email."
+---
+
+<Note>
+  All endpoints require a valid **NextAuth session cookie**. Reminder schedules are upserted — creating a schedule with an existing `(dayOffset, channel)` combination updates it.
+</Note>
+
+## Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/weddings/:weddingId/reminders` | List all reminder schedules |
+| `POST` | `/api/weddings/:weddingId/reminders` | Create or update a reminder schedule |
+| `POST` | `/api/weddings/:weddingId/reminders/send` | Blast reminders to pending guests |
+
+---
+
+## GET /api/weddings/:weddingId/reminders
+
+Returns all reminder schedules for the wedding, ordered by `dayOffset` ascending.
+
+```bash
+curl http://localhost:3000/api/weddings/clx1abc123/reminders \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**200 OK**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "rem_1",
+      "weddingId": "clx1abc123",
+      "dayOffset": 3,
+      "channel": "WHATSAPP",
+      "template": "Hi {guest_name}, this is a reminder for {event_name} on {event_date}. RSVP here: {rsvp_link}",
+      "isActive": true,
+      "createdAt": "2026-03-01T10:00:00.000Z",
+      "updatedAt": "2026-03-01T10:00:00.000Z"
+    }
+  ],
+  "error": null,
+  "meta": null
+}
+```
+
+---
+
+## POST /api/weddings/:weddingId/reminders
+
+Creates a new reminder schedule or updates an existing one for the same `(dayOffset, channel)` pair.
+
+### Request body
+
+<ParamField body="dayOffset" type="number" required>
+  Days after the invite is sent to trigger the reminder (e.g. `3` = 3 days after invite).
+</ParamField>
+
+<ParamField body="channel" type="string" required>
+  Delivery channel: `WHATSAPP`, `SMS`, or `EMAIL`.
+</ParamField>
+
+<ParamField body="template" type="string" required>
+  Message template. Supports variables: `{guest_name}`, `{event_name}`, `{event_date}`, `{rsvp_link}`.
+</ParamField>
+
+<ParamField body="isActive" type="boolean">
+  Whether this schedule is active. Defaults to `true`.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3000/api/weddings/clx1abc123/reminders \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{
+    "dayOffset": 3,
+    "channel": "WHATSAPP",
+    "template": "Hi {guest_name}, reminder for {event_name} on {event_date}. RSVP: {rsvp_link}",
+    "isActive": true
+  }'
+```
+
+**201 Created**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "rem_1",
+    "weddingId": "clx1abc123",
+    "dayOffset": 3,
+    "channel": "WHATSAPP",
+    "template": "Hi {guest_name}, reminder for {event_name}...",
+    "isActive": true
+  },
+  "error": null,
+  "meta": null
+}
+```
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 400 | `"dayOffset, channel, and template are required"` |
+
+---
+
+## POST /api/weddings/:weddingId/reminders/send
+
+Blasts a reminder message to all pending guests across all events for this wedding using the specified channel.
+
+<Note>
+  This endpoint uses `sendBulkReminders()` which dispatches via BullMQ + Redis job queue. Requires `REDIS_URL` and the relevant channel credentials (`TWILIO_*`, `MSG91_*`, or `SMTP_*`) configured in the environment.
+</Note>
+
+### Request body
+
+<ParamField body="channel" type="string" required>
+  Channel to send on: `WHATSAPP`, `SMS`, or `EMAIL`.
+</ParamField>
+
+<ParamField body="message" type="string" required>
+  The message text to send. Can use template variables: `{guest_name}`, `{event_name}`, `{event_date}`, `{rsvp_link}`.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3000/api/weddings/clx1abc123/reminders/send \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{
+    "channel": "WHATSAPP",
+    "message": "Hi {guest_name}, please RSVP for the upcoming events. Link: {rsvp_link}"
+  }'
+```
+
+**200 OK**
+```json
+{
+  "success": true,
+  "data": {
+    "sent": 42,
+    "failed": 3,
+    "total": 45,
+    "details": [
+      { "guestId": "g_1", "guestName": "Rajesh Sharma", "status": "sent" },
+      { "guestId": "g_7", "guestName": "Priya Verma", "status": "failed", "error": "Invalid number" }
+    ]
+  },
+  "error": null,
+  "meta": null
+}
+```
+
+### Error responses
+
+| Status | Error |
+|--------|-------|
+| 400 | `"channel and message are required"` |
+| 401 | `"Unauthorized"` |
+| 404 | `"Wedding not found"` |

@@ -1,0 +1,117 @@
+---
+title: 'Database setup'
+description: 'How to set up and manage the databases for the Wedding CRM (SQLite) and the RSVP Platform (PostgreSQL).'
+---
+
+<Tabs>
+  <Tab title="CRM (SQLite)">
+    The Wedding CRM uses **SQLite via LibSQL**, managed through Prisma 7.5. The database is a single file (`dev.db`) created automatically by running migrations.
+
+    ### Apply migrations
+
+    From the `SaaS/wedding-crm/` directory, run:
+
+    ```bash
+    npx prisma migrate deploy
+    ```
+
+    This applies all pending migrations in `prisma/migrations/` and creates `prisma/dev.db` if it does not exist.
+
+    ### Seed demo data
+
+    The seed script populates the database with demo users, weddings, leads, vendors, and checklists:
+
+    ```bash
+    npm run seed
+    ```
+
+    After seeding, the following CRM accounts are available at **http://localhost:3001/login**:
+
+    | Role                 | Email                | Password   |
+    | -------------------- | -------------------- | ---------- |
+    | Admin                | `admin@wedcrm.com`   | `admin123` |
+    | Relationship Manager | `anjali@wedcrm.com`  | `admin123` |
+    | Relationship Manager | `rohit@wedcrm.com`   | `admin123` |
+    | Vendor Coordinator   | `meera@wedcrm.com`   | `admin123` |
+
+    ### Create a new migration
+
+    After editing `prisma/schema.prisma`, generate and apply a migration with:
+
+    ```bash
+    npx prisma migrate dev --name describe-your-change
+    ```
+
+    ### Inspect data with Prisma Studio
+
+    <Note>
+      Use Prisma Studio to browse and edit the SQLite database through a visual UI:
+
+      ```bash
+      npx prisma studio
+      ```
+
+      This opens a browser tab at `http://localhost:5555` where you can inspect all 18 CRM models.
+    </Note>
+  </Tab>
+
+  <Tab title="RSVP Platform (PostgreSQL)">
+    The RSVP Platform requires a running **PostgreSQL 14+** instance. The schema is managed through Prisma 6.19 using `db push` (schema push) rather than migration files.
+
+    ### Install and start PostgreSQL
+
+    On macOS with Homebrew:
+
+    ```bash
+    brew install postgresql@17
+    brew services start postgresql@17
+    ```
+
+    Create the role and database:
+
+    ```bash
+    psql -h localhost -U $(whoami) -d postgres -c "CREATE ROLE postgres WITH LOGIN SUPERUSER PASSWORD 'postgres';"
+    createdb -U postgres wedding_rsvp
+    ```
+
+    Set `DATABASE_URL` in `RSVP/.env`:
+
+    ```bash
+    DATABASE_URL="postgresql://postgres:postgres@localhost:5432/wedding_rsvp"
+    ```
+
+    ### Push the schema
+
+    From the `RSVP/` directory, push the Prisma schema directly to the database:
+
+    ```bash
+    npx prisma db push
+    ```
+
+    This creates all tables, enums, and indexes defined in `prisma/schema.prisma` without generating migration files.
+
+    ### Generate the Prisma client
+
+    After pushing the schema, regenerate the Prisma client:
+
+    ```bash
+    npx prisma generate
+    ```
+
+    This must be re-run any time `prisma/schema.prisma` changes.
+
+    ### Find the auto-generated API key
+
+    When a planner registers at `/register`, an API key is automatically generated and stored in the `planners` table. To retrieve it:
+
+    <Note>
+      Open Prisma Studio from the `RSVP/` directory:
+
+      ```bash
+      npx prisma studio
+      ```
+
+      Navigate to the **Planner** model and locate the `apiKey` field for the registered account. You will need this value when connecting the CRM to the RSVP Platform.
+    </Note>
+  </Tab>
+</Tabs>

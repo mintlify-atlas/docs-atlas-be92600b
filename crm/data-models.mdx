@@ -1,0 +1,233 @@
+---
+title: "CRM data models"
+description: "All 18 Prisma models in the Wedding CRM SQLite database with entity relationships and key field definitions."
+---
+
+The Wedding CRM uses SQLite via LibSQL with a Prisma 7.5 client. The schema is defined in `SaaS/wedding-crm/prisma/schema.prisma` and contains 18 models.
+
+## All models
+
+`User`, `Lead`, `Activity`, `Wedding`, `WeddingFunction`, `FunctionTask`, `SOPTemplate`, `SOPTemplateItem`, `Checklist`, `ChecklistItem`, `Vendor`, `VendorAssignment`, `VendorFollowUp`, `DataLibraryItem`, `ClientPortalAccess`, `Note`, `Payment`, `RSVPGuest`
+
+## Entity relationship diagram
+
+```
+users ─────────────────── 1:N ──── leads (assigned + created)
+users ─────────────────── 1:N ──── weddings (assigned RM)
+users ─────────────────── 1:N ──── activities
+users ─────────────────── 1:N ──── notes
+leads ─────────────────── 1:1 ──── weddings (conversion)
+leads ─────────────────── 1:N ──── activities
+weddings ──────────────── 1:N ──── wedding_functions
+weddings ──────────────── 1:N ──── vendor_assignments
+weddings ──────────────── 1:N ──── checklists
+weddings ──────────────── 1:N ──── activities
+weddings ──────────────── 1:N ──── notes
+weddings ──────────────── 1:N ──── payments
+weddings ──────────────── 1:N ──── client_portal_access
+weddings ──────────────── 1:N ──── rsvp_guests (integration cache)
+wedding_functions ─────── 1:N ──── function_tasks
+wedding_functions ─────── 1:N ──── vendor_assignments
+vendors ───────────────── 1:N ──── vendor_assignments
+vendors ───────────────── 1:N ──── vendor_follow_ups
+sop_templates ─────────── 1:N ──── sop_template_items
+sop_templates ─────────── 1:N ──── checklists
+checklists ────────────── 1:N ──── checklist_items
+```
+
+## Key model schemas
+
+<Tabs>
+  <Tab title="Lead">
+    ```prisma
+    model Lead {
+      id           String    @id @default(cuid())
+      name         String
+      email        String?
+      phone        String?
+      source       String?
+      status       String    @default("NEW")
+      budget       Float?
+      weddingDate  DateTime?
+      venue        String?
+      guestCount   Int?
+      requirements String?
+      notes        String?
+      priority     String    @default("MEDIUM")
+      lostReason   String?
+      nextFollowUp DateTime?
+      createdAt    DateTime  @default(now())
+      updatedAt    DateTime  @updatedAt
+
+      assignedToId String?
+      assignedTo   User?      @relation("AssignedRM", fields: [assignedToId], references: [id])
+      createdById  String?
+      createdBy    User?      @relation("CreatedBy", fields: [createdById], references: [id])
+      activities   Activity[]
+      wedding      Wedding?
+    }
+    ```
+  </Tab>
+  <Tab title="Wedding">
+    ```prisma
+    model Wedding {
+      id          String   @id @default(cuid())
+      clientName  String
+      partnerName String?
+      weddingDate DateTime
+      venue       String?
+      city        String?
+      budget      Float?
+      guestCount  Int?
+      status      String   @default("PLANNING")
+      theme       String?
+      description String?
+      createdAt   DateTime @default(now())
+      updatedAt   DateTime @updatedAt
+
+      leadId       String? @unique
+      lead         Lead?   @relation(fields: [leadId], references: [id])
+      assignedRMId String?
+      assignedRM   User?   @relation("WeddingRM", fields: [assignedRMId], references: [id])
+
+      // RSVP Platform integration
+      rsvpPlatformUrl String?
+      rsvpWeddingId   String?
+      rsvpApiKey      String?
+
+      functions          WeddingFunction[]
+      vendorAssignments  VendorAssignment[]
+      checklists         Checklist[]
+      activities         Activity[]
+      notes              Note[]
+      payments           Payment[]
+      clientPortalAccess ClientPortalAccess[]
+      rsvpGuests         RSVPGuest[]
+    }
+    ```
+  </Tab>
+  <Tab title="Vendor">
+    ```prisma
+    model Vendor {
+      id         String   @id @default(cuid())
+      name       String
+      category   String
+      email      String?
+      phone      String?
+      address    String?
+      city       String?
+      rating     Float?
+      priceRange String?
+      notes      String?
+      isActive   Boolean  @default(true)
+      website    String?
+      instagram  String?
+      portfolio  String?
+      createdAt  DateTime @default(now())
+      updatedAt  DateTime @updatedAt
+
+      assignments VendorAssignment[]
+      followUps   VendorFollowUp[]
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## All model summaries
+
+### User
+
+Authenticated CRM users. Roles: `ADMIN`, `RELATIONSHIP_MANAGER`, `VENDOR_COORDINATOR`, `CLIENT`. Fields: `id`, `name`, `email`, `password` (bcrypt), `role`, `phone`, `avatar`, `isActive`.
+
+### Lead
+
+Incoming wedding inquiries. Linked to an assigned RM (`User`) and optionally converted to a `Wedding` (1:1). Tracks `status` (7 pipeline stages), `source`, `priority`, `budget`, `weddingDate`, `guestCount`.
+
+### Activity
+
+Event log entries attached to either a `Lead` or a `Wedding`. Stores `type`, `title`, `description`, `date`, and the `User` who created it.
+
+### Wedding
+
+Core wedding project record. Linked to a `Lead` (conversion), an assigned RM, and all child entities. Stores RSVP Platform integration credentials (`rsvpPlatformUrl`, `rsvpWeddingId`, `rsvpApiKey`).
+
+### WeddingFunction
+
+A ceremony segment (Mehendi, Sangeet, etc.) belonging to a `Wedding`. Has `name`, `date`, `venue`, `budget`, `guestCount`, `status`, and child `FunctionTask` and `VendorAssignment` records.
+
+### FunctionTask
+
+A task attached to a `WeddingFunction`. Fields: `title`, `description`, `status`, `dueDate`, `priority`.
+
+### SOPTemplate
+
+A reusable checklist blueprint. Has `name`, `description`, `category`, `isActive`, and child `SOPTemplateItem` records.
+
+### SOPTemplateItem
+
+A single item within an `SOPTemplate`. Fields: `title`, `description`, `orderIndex`, `daysOffset` (relative to wedding date), `category`, `isMandatory`.
+
+### Checklist
+
+An instance of a template applied to a `Wedding`. Named `"<Template> - <Client>"`. Linked to both the `Wedding` and the source `SOPTemplate`.
+
+### ChecklistItem
+
+An individual task within a `Checklist`. Tracks `isCompleted`, `completedAt`, `dueDate` (calculated from `daysOffset`), `isMandatory`, `category`, `orderIndex`.
+
+### Vendor
+
+Vendor directory record. 16 categories, 4 price ranges, rating, portfolio, and social links. See [vendor management](/crm/modules/vendor-management).
+
+### VendorAssignment
+
+Many-to-many join between `Vendor`, `Wedding`, and optionally `WeddingFunction`. Stores `status` (`PROPOSED` / `CONFIRMED`) and `agreedPrice`.
+
+### VendorFollowUp
+
+A scheduled follow-up with a vendor. Types: `CALL`, `EMAIL`, `MEETING`, `WHATSAPP`. Fields: `followUpDate`, `notes`, `isCompleted`, `completedAt`.
+
+### DataLibraryItem
+
+Knowledge base entry. 9 categories, comma-separated `tags`, optional `fileUrl`/`fileType`, and `isPublic` visibility flag.
+
+### ClientPortalAccess
+
+A shareable access link for a client. Stores a UUID `accessToken`, comma-separated `permissions`, `isActive` toggle, and `lastAccessed` timestamp. Linked to a `Wedding` and a `User` (role `CLIENT`).
+
+### Note
+
+Free-text notes attached to a `Wedding` or a `User`. Fields: `content`, `createdAt`.
+
+### Payment
+
+A payment milestone for a `Wedding`. Fields: `amount`, `type`, `status` (`PENDING` / `RECEIVED` / `OVERDUE`), `dueDate`, `paidDate`, `notes`.
+
+### RSVPGuest
+
+Local cache of guest data synced from the RSVP Platform. Unique per `(weddingId, rsvpGuestId)` and per `(weddingId, phone)`. Stores `overallStatus` (`PENDING` / `ATTENDING` / `DECLINED`), `rsvpData` (JSON string of per-event responses), and `lastSyncedAt`.
+
+```prisma
+model RSVPGuest {
+  id            String   @id @default(cuid())
+  weddingId     String
+  rsvpGuestId   String
+  name          String
+  phone         String
+  email         String?
+  side          String?  // BRIDE, GROOM, MUTUAL
+  groupTag      String?
+  isVip         Boolean  @default(false)
+  dietaryPref   String?
+  overallStatus String   @default("PENDING")
+  rsvpData      String?  // JSON string: per-event RSVP details
+  lastSyncedAt  DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  wedding Wedding @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+
+  @@unique([weddingId, rsvpGuestId])
+  @@unique([weddingId, phone])
+}
+```

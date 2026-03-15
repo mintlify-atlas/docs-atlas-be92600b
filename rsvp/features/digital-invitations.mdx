@@ -1,0 +1,109 @@
+---
+title: "Digital invitations"
+description: "Themed, multi-language digital invitations with animated options and customisable backgrounds, served via public URL."
+---
+
+Each wedding event can have its own digital invitation, accessible publicly at a shareable URL.
+
+## Public URL
+
+```
+/invite/:weddingCode/:eventSlug
+```
+
+No authentication is required to view an invitation.
+
+## Themes
+
+Five themes are available, defined in `src/lib/constants.ts`:
+
+| Value | Label | Description |
+|---|---|---|
+| `FLORAL` | Floral | Delicate flowers and botanical elements |
+| `ROYAL` | Royal | Regal motifs with gold accents |
+| `MINIMAL` | Minimal | Clean, modern typography-forward design |
+| `BOHO` | Boho | Bohemian, earthy, and free-spirited |
+| `TRADITIONAL` | Traditional | Classic Indian wedding patterns |
+
+```typescript
+// src/lib/constants.ts
+export const INVITE_THEMES = [
+  { value: "FLORAL",      label: "Floral",      description: "Delicate flowers and botanical elements" },
+  { value: "ROYAL",       label: "Royal",       description: "Regal motifs with gold accents" },
+  { value: "MINIMAL",     label: "Minimal",     description: "Clean, modern typography-forward design" },
+  { value: "BOHO",        label: "Boho",        description: "Bohemian, earthy, and free-spirited" },
+  { value: "TRADITIONAL", label: "Traditional", description: "Classic Indian wedding patterns" },
+] as const;
+```
+
+## Languages
+
+Nine languages are supported, defined in `src/lib/constants.ts`:
+
+| Value | Display label |
+|---|---|
+| `ENGLISH` | English |
+| `HINDI` | हिन्दी |
+| `TAMIL` | தமிழ் |
+| `TELUGU` | తెలుగు |
+| `BENGALI` | বাংলা |
+| `MARATHI` | मराठी |
+| `GUJARATI` | ગુજરાતી |
+| `KANNADA` | ಕನ್ನಡ |
+| `PUNJABI` | ਪੰਜਾਬੀ |
+
+```typescript
+// src/lib/constants.ts
+export const INVITE_LANGUAGES = [
+  { value: "ENGLISH",  label: "English" },
+  { value: "HINDI",    label: "हिन्दी" },
+  { value: "TAMIL",    label: "தமிழ்" },
+  { value: "TELUGU",   label: "తెలుగు" },
+  { value: "BENGALI",  label: "বাংলা" },
+  { value: "MARATHI",  label: "मराठी" },
+  { value: "GUJARATI", label: "ગુજરાતી" },
+  { value: "KANNADA",  label: "ಕನ್ನಡ" },
+  { value: "PUNJABI",  label: "ਪੰਜਾਬੀ" },
+] as const;
+```
+
+## Invite template configuration
+
+Each invite is backed by an `InviteTemplate` record. Templates can be scoped to a specific event (`eventId`) or apply wedding-wide (`eventId: null`).
+
+```prisma
+model InviteTemplate {
+  id                 String         @id @default(cuid())
+  weddingId          String
+  eventId            String?        // null = wedding-wide template
+  theme              InviteTheme    @default(FLORAL)
+  language           InviteLanguage @default(ENGLISH)
+  backgroundImageUrl String?
+  animated           Boolean        @default(false)
+  customMessage      String?        @db.Text
+  templateConfig     Json?          // flexible JSON for layout/styling
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+}
+```
+
+### Customisable fields
+
+| Field | Type | Description |
+|---|---|---|
+| `theme` | `InviteTheme` | Visual design theme |
+| `language` | `InviteLanguage` | Display language |
+| `backgroundImageUrl` | `String?` | URL of background image |
+| `animated` | `Boolean` | Enable entrance animation |
+| `customMessage` | `String?` | Planner-written invitation message |
+| `templateConfig` | `Json?` | Flexible JSON for layout and styling overrides |
+
+## Linking a template to an event
+
+A `WeddingEvent` holds an optional `inviteTemplateId` reference. Assign a template via the event settings in the planner dashboard at `/weddings/:id`.
+
+## API endpoints
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/invite/:weddingCode/:eventSlug` | Public | Render the themed digital invitation |

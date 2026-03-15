@@ -1,0 +1,69 @@
+---
+title: "Dashboard"
+description: "Aggregated statistics for the CRM dashboard: lead pipeline counts, active weddings, revenue, vendor counts, and pending tasks."
+---
+
+<Note>
+  This endpoint does not require an authenticated session in the current implementation. It is intended for internal use by the CRM dashboard page.
+</Note>
+
+## GET /api/dashboard
+
+Returns aggregated statistics powering the CRM overview dashboard.
+
+```bash
+curl http://localhost:3001/api/dashboard \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+### Response fields
+
+<ResponseField name="totalLeads" type="number">
+  Total lead count across all statuses.
+</ResponseField>
+
+<ResponseField name="activeWeddings" type="number">
+  Count of weddings with status `PLANNING` or `IN_PROGRESS`.
+</ResponseField>
+
+<ResponseField name="totalVendors" type="number">
+  Count of active vendors (`isActive: true`).
+</ResponseField>
+
+<ResponseField name="pendingTasks" type="number">
+  Count of incomplete checklist items (`isCompleted: false`) across all checklists.
+</ResponseField>
+
+<ResponseField name="recentLeads" type="array">
+  The 10 most recently created lead records.
+</ResponseField>
+
+<ResponseField name="upcomingWeddings" type="array">
+  Up to 5 weddings with `weddingDate >= today`, ordered by date ascending.
+</ResponseField>
+
+<ResponseField name="leadsByStatus" type="object">
+  Map of lead status to count. Example: `{ "NEW": 5, "CONTACTED": 3, "WON": 2 }`.
+</ResponseField>
+
+<ResponseField name="revenue" type="number">
+  Sum of all payments with status `RECEIVED`.
+</ResponseField>
+
+**200 OK**
+```json
+{
+  "totalLeads": 24,
+  "activeWeddings": 8,
+  "totalVendors": 45,
+  "pendingTasks": 37,
+  "recentLeads": [ { "id": "lead_1", "name": "Priya & Arjun", "status": "NEW", ... } ],
+  "upcomingWeddings": [ { "id": "w_1", "clientName": "Kabir Singh", "weddingDate": "2026-05-15T00:00:00.000Z", ... } ],
+  "leadsByStatus": { "NEW": 5, "CONTACTED": 4, "QUALIFIED": 3, "WON": 7, "LOST": 5 },
+  "revenue": 1250000
+}
+```
+
+<Note>
+  On error, all numeric fields return `0` and array fields return `[]`. The dashboard page handles this gracefully without showing an error state.
+</Note>

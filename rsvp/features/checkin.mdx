@@ -1,0 +1,110 @@
+---
+title: "Event-day check-in"
+description: "QR code and manual check-in with HMAC-SHA256 signature verification, PIN protection, and duplicate prevention."
+---
+
+The check-in module provides a dedicated kiosk interface for event-day attendance tracking. Staff access it from a tablet or kiosk without needing a planner account.
+
+## Check-in URL
+
+```
+/checkin/:weddingCode/:eventSlug
+```
+
+Access requires the event's check-in PIN.
+
+## CheckInMethod enum
+
+| Value | Description |
+|---|---|
+| `QR` | Guest presents QR code scanned by staff |
+| `MANUAL` | Staff searches guest by name or phone number |
+
+## QR code check-in
+
+Each guest's QR code encodes their `guestId` and a HMAC-SHA256 signature. This prevents forged QR codes.
+
+### How QR signing works
+
+```typescript
+// src/lib/utils.ts
+export async function generateHmac(data: string): Promise<string> {
+  const { createHmac } = await import("crypto");
+  const secret = process.env.HMAC_SECRET ?? "default-dev-secret";
+  return createHmac("sha256", secret).update(data).digest("hex");
+}
+
+export async function verifyHmac(data: string, signature: string): Promise<boolean> {
+  const expected = await generateHmac(data);
+  return expected === signature;
+}
+```
+
+1. At invite generation time, a QR code is created by encoding `guestId:signature` where `signature = HMAC-SHA256(guestId, HMAC_SECRET)`.
+2. At check-in time, the scanner decodes the QR data, re-computes the HMAC, and compares it to the embedded signature.
+3. If signatures do not match, check-in is rejected.
+
+<Warning>
+  Set `HMAC_SECRET` to a strong random value in production. The default `"default-dev-secret"` is insecure and must not be used in production environments.
+</Warning>
+
+## Manual check-in
+
+Staff can search for a guest by name or phone number. The check-in API at `GET /api/checkin/:code/:slug` returns a filtered guest list matching the search query.
+
+## PIN protection
+
+Each `WeddingEvent` has an optional `checkInPin` (4–6 digits). The PIN is submitted with every check-in API request.
+
+```typescript
+// From weddingEventSchema in validations/index.ts
+checkInPin: z.string().min(4).max(6).regex(/^\d+$/, "PIN must be digits only").optional()
+```
+
+PIN validation is enforced by the check-in API route before returning any data.
+
+## Duplicate check-in prevention
+
+The `CheckIn` model has a unique constraint on `[guestId, eventId]`:
+
+```prisma
+@@unique([guestId, eventId]) // prevent duplicate check-ins
+```
+
+If a guest is already checked in for that event, the API returns an error rather than creating a second record.
+
+## Check-in data model
+
+```prisma
+model CheckIn {
+  id          String        @id @default(cuid())
+  guestId     String
+  eventId     String
+  checkedInAt DateTime      @default(now())
+  checkedInBy String?       // staff member name
+  method      CheckInMethod @default(MANUAL)
+
+  guest Guest        @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  event WeddingEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([guestId, eventId])
+  @@map("check_ins")
+}
+```
+
+## Real-time statistics
+
+The check-in view displays live statistics: total invited, total checked in, and check-in percentage. These are recomputed on each request to `GET /api/checkin/:code/:slug`.
+
+## API endpoints
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/checkin/:code/:slug` | PIN | Check-in stats and guest search |
+| `POST` | `/api/checkin/:code/:slug` | PIN | Check in a guest (QR or manual) |
+
+## Required environment variable
+
+| Variable | Required | Description |
+|---|---|---|
+| `HMAC_SECRET` | Yes | Secret key used to sign and verify QR code payloads |

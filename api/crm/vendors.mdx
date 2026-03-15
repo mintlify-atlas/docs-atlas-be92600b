@@ -1,0 +1,193 @@
+---
+title: "Vendors"
+description: "Manage the vendor directory, vendor assignments, and follow-up tracking in the CRM."
+---
+
+<Note>
+  All endpoints require a **NextAuth session cookie**.
+</Note>
+
+## Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/vendors` | List vendors with filters |
+| `POST` | `/api/vendors` | Create a vendor |
+| `GET` | `/api/vendors/:id` | Get a single vendor |
+| `PUT` | `/api/vendors/:id` | Update a vendor |
+| `DELETE` | `/api/vendors/:id` | Delete a vendor |
+| `POST` | `/api/vendors/:id/followups` | Log a follow-up |
+
+---
+
+## GET /api/vendors
+
+Returns all active vendors. Each vendor includes the count of wedding assignments and the next upcoming (incomplete) follow-up.
+
+### Query parameters
+
+<ParamField query="category" type="string">
+  Filter by category. Supported values: `Photographer`, `Videographer`, `Caterer`, `Decorator`, `DJ`, `Makeup Artist`, `Mehendi Artist`, `Venue`, `Florist`, `Invitation`, `Transport`, `Lighting`, `Entertainment`, `Pandit`, `Choreographer`, `Other`.
+</ParamField>
+
+<ParamField query="city" type="string">
+  Partial city name filter (case-insensitive).
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search by `name`, `email`, or `city`.
+</ParamField>
+
+```bash
+curl "http://localhost:3001/api/vendors?category=Photographer&city=Mumbai" \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**200 OK**
+```json
+[
+  {
+    "id": "v_1",
+    "name": "Frames by Farhan",
+    "category": "Photographer",
+    "email": "farhan@frames.com",
+    "phone": "9876543210",
+    "city": "Mumbai",
+    "priceRange": "Premium",
+    "rating": 4.8,
+    "website": "https://framesbyfarhan.com",
+    "instagram": "@framesbyfarhan",
+    "isActive": true,
+    "_count": { "assignments": 3 },
+    "followUps": [ { "id": "fu_1", "type": "Call", "followUpDate": "2026-04-01T10:00:00.000Z", "isCompleted": false } ]
+  }
+]
+```
+
+---
+
+## POST /api/vendors
+
+Creates a new vendor in the directory.
+
+### Request body
+
+<ParamField body="name" type="string" required>
+  Vendor business name.
+</ParamField>
+
+<ParamField body="category" type="string" required>
+  One of the 16 supported categories (see GET filter values above).
+</ParamField>
+
+<ParamField body="email" type="string">Contact email.</ParamField>
+<ParamField body="phone" type="string">Contact phone.</ParamField>
+<ParamField body="address" type="string">Street address.</ParamField>
+<ParamField body="city" type="string">City.</ParamField>
+<ParamField body="rating" type="number">Rating (0–5).</ParamField>
+
+<ParamField body="priceRange" type="string">
+  `Budget`, `Moderate`, `Premium`, or `Luxury`.
+</ParamField>
+
+<ParamField body="notes" type="string">Internal notes.</ParamField>
+<ParamField body="website" type="string">Website URL.</ParamField>
+<ParamField body="instagram" type="string">Instagram handle or URL.</ParamField>
+
+```bash
+curl -X POST http://localhost:3001/api/vendors \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{
+    "name": "Frames by Farhan",
+    "category": "Photographer",
+    "phone": "9876543210",
+    "city": "Mumbai",
+    "priceRange": "Premium",
+    "rating": 4.8,
+    "website": "https://framesbyfarhan.com",
+    "instagram": "@framesbyfarhan"
+  }'
+```
+
+**201 Created** — returns the new vendor record.
+
+---
+
+## GET /api/vendors/:id
+
+Returns a single vendor with all follow-ups and assignments.
+
+```bash
+curl http://localhost:3001/api/vendors/v_1 \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+---
+
+## PUT /api/vendors/:id
+
+Updates all vendor fields.
+
+```bash
+curl -X PUT http://localhost:3001/api/vendors/v_1 \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{"priceRange": "Luxury", "rating": 4.9}'
+```
+
+---
+
+## DELETE /api/vendors/:id
+
+Soft-deletes the vendor by setting `isActive: false`. The vendor is excluded from `GET /api/vendors` results but assignment history is preserved.
+
+```bash
+curl -X DELETE http://localhost:3001/api/vendors/v_1 \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+---
+
+## POST /api/vendors/:id/followups
+
+Logs a follow-up activity for a vendor.
+
+### Request body
+
+<ParamField body="type" type="string" required>
+  Follow-up type: `Call`, `Email`, `Meeting`, or `WhatsApp`.
+</ParamField>
+
+<ParamField body="followUpDate" type="string" required>
+  ISO 8601 datetime of the follow-up.
+</ParamField>
+
+<ParamField body="notes" type="string">
+  Follow-up notes.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3001/api/vendors/v_1/followups \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{
+    "type": "Call",
+    "followUpDate": "2026-04-01T10:00:00Z",
+    "notes": "Discussed pricing for 3 events"
+  }'
+```
+
+**201 Created**
+```json
+{
+  "id": "fu_1",
+  "vendorId": "v_1",
+  "type": "Call",
+  "followUpDate": "2026-04-01T10:00:00.000Z",
+  "notes": "Discussed pricing for 3 events",
+  "isCompleted": false,
+  "completedAt": null,
+  "createdAt": "2026-03-20T09:00:00.000Z"
+}
+```

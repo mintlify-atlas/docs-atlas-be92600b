@@ -1,0 +1,199 @@
+---
+title: "Leads"
+description: "Manage the lead pipeline in the CRM. Supports filtering, CRUD, and one-click conversion to a wedding project."
+---
+
+<Note>
+  Lead endpoints are protected by **NextAuth session cookie**.
+</Note>
+
+## Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/leads` | List leads with optional filters |
+| `POST` | `/api/leads` | Create a new lead |
+| `GET` | `/api/leads/:id` | Get a single lead |
+| `PUT` | `/api/leads/:id` | Update a lead |
+| `DELETE` | `/api/leads/:id` | Delete a lead |
+| `POST` | `/api/leads/convert` | Convert a lead to a wedding |
+
+---
+
+## GET /api/leads
+
+Returns all leads ordered by `createdAt` descending. Includes the assigned relationship manager.
+
+### Query parameters
+
+<ParamField query="status" type="string">
+  Filter by pipeline status: `NEW`, `CONTACTED`, `QUALIFIED`, `PROPOSAL_SENT`, `NEGOTIATION`, `WON`, `LOST`.
+</ParamField>
+
+<ParamField query="source" type="string">
+  Filter by lead source (e.g. `Website`, `Instagram`, `Referral`).
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search by `name`, `email`, or `phone`.
+</ParamField>
+
+```bash
+curl "http://localhost:3001/api/leads?status=QUALIFIED&search=sharma" \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+**200 OK**
+```json
+[
+  {
+    "id": "lead_1",
+    "name": "Priya & Arjun",
+    "email": "priya@email.com",
+    "phone": "9876543210",
+    "source": "Instagram",
+    "status": "QUALIFIED",
+    "budget": 500000,
+    "weddingDate": "2026-11-15T00:00:00.000Z",
+    "venue": "Udaipur",
+    "guestCount": 200,
+    "priority": "HIGH",
+    "assignedTo": { "id": "usr_2", "name": "Anjali" }
+  }
+]
+```
+
+---
+
+## POST /api/leads
+
+Creates a new lead in the pipeline.
+
+### Request body
+
+<ParamField body="name" type="string" required>
+  Lead / couple name.
+</ParamField>
+
+<ParamField body="email" type="string">
+  Contact email.
+</ParamField>
+
+<ParamField body="phone" type="string">
+  Contact phone.
+</ParamField>
+
+<ParamField body="source" type="string">
+  Lead source: `Website`, `Instagram`, `Referral`, `Wedding Fair`, `Walk-in`, or other.
+</ParamField>
+
+<ParamField body="status" type="string">
+  Pipeline status. Defaults to `NEW`.
+</ParamField>
+
+<ParamField body="priority" type="string">
+  `LOW`, `MEDIUM`, `HIGH`, or `URGENT`. Defaults to `MEDIUM`.
+</ParamField>
+
+<ParamField body="budget" type="number">
+  Estimated budget in currency units.
+</ParamField>
+
+<ParamField body="weddingDate" type="string">
+  Expected wedding date (ISO 8601).
+</ParamField>
+
+<ParamField body="venue" type="string">
+  Preferred venue or city.
+</ParamField>
+
+<ParamField body="guestCount" type="number">
+  Estimated guest count.
+</ParamField>
+
+<ParamField body="requirements" type="string">
+  Free-text requirements.
+</ParamField>
+
+<ParamField body="notes" type="string">
+  Internal notes.
+</ParamField>
+
+<ParamField body="assignedToId" type="string">
+  ID of the user (RM) to assign the lead to.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3001/api/leads \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{
+    "name": "Priya & Arjun",
+    "email": "priya@email.com",
+    "phone": "9876543210",
+    "source": "Instagram",
+    "priority": "HIGH",
+    "budget": 500000,
+    "weddingDate": "2026-11-15T00:00:00Z"
+  }'
+```
+
+**201 Created** — returns the created lead record.
+
+---
+
+## GET /api/leads/:id
+
+Returns a single lead by ID.
+
+```bash
+curl http://localhost:3001/api/leads/lead_1 \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+---
+
+## PUT /api/leads/:id
+
+Fully updates a lead. Supply all fields or omit unchanged ones.
+
+```bash
+curl -X PUT http://localhost:3001/api/leads/lead_1 \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{"status": "PROPOSAL_SENT", "priority": "URGENT"}'
+```
+
+---
+
+## DELETE /api/leads/:id
+
+Deletes the lead and cascade-deletes associated activities.
+
+```bash
+curl -X DELETE http://localhost:3001/api/leads/lead_1 \
+  -H "Cookie: next-auth.session-token=<token>"
+```
+
+---
+
+## POST /api/leads/convert
+
+Converts a lead to a wedding project. Creates a `Wedding` record populated from the lead's data (`clientName`, `weddingDate`, `venue`, `budget`, `guestCount`) and updates the lead's status to `WON`.
+
+<ParamField body="leadId" type="string" required>
+  ID of the lead to convert.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3001/api/leads/convert \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=<token>" \
+  -d '{"leadId": "lead_1"}'
+```
+
+**201 Created** — returns the new `Wedding` record.
+
+| Status | Error |
+|--------|-------|
+| 404 | `"Lead not found"` |

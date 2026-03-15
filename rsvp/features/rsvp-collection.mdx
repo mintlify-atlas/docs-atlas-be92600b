@@ -1,0 +1,104 @@
+---
+title: "RSVP collection"
+description: "Token-based guest portal with per-event attending/declined responses, plus-one counts, and real-time CRM webhook dispatch."
+---
+
+Guests submit RSVPs through a personalised portal accessed via a unique URL — no account or login is required.
+
+## Guest portal URL
+
+```
+/guest/:guestToken
+```
+
+The `guestToken` is a CUID generated when the guest record is created. Each guest has a distinct URL.
+
+## RSVP submission
+
+Guests can respond to each event they have been invited to. The submission is validated against `rsvpSubmissionSchema`:
+
+```typescript
+// rsvpSubmissionSchema
+{
+  guestToken: string;
+  dietaryPref?: "VEG" | "NON_VEG" | "JAIN" | "VEGAN" | "CUSTOM";
+  dietaryNotes?: string;
+  responses: [
+    {
+      eventId: string;
+      rsvpStatus: "ATTENDING" | "DECLINED";
+      plusOneCount: number;     // 0 or 1
+      plusOneName?: string;
+      plusOneDietaryPref?: DietaryPreference;
+      childrenCount: number;    // 0–10
+      specialNotes?: string;
+    }
+    // ... one entry per invited event
+  ];
+}
+```
+
+### RSVPStatus enum
+
+| Value | Meaning |
+|---|---|
+| `PENDING` | Guest has not yet responded |
+| `ATTENDING` | Guest confirmed attendance |
+| `DECLINED` | Guest declined |
+
+<Note>
+  The enum in `schema.prisma` uses `ATTENDING` (not `CONFIRMED`). The display label from `constants.ts` maps `ATTENDING` → "Attending".
+</Note>
+
+## Per-event responses
+
+Each invited guest has a `GuestEventInvite` junction record per event. The guest submits one response per event, allowing them to attend some events but not others.
+
+Fields updated on submission:
+
+| Field | Description |
+|---|---|
+| `rsvpStatus` | `ATTENDING` or `DECLINED` |
+| `plusOneCount` | 0 or 1 |
+| `childrenCount` | 0–10 |
+| `specialNotes` | Free-text notes from the guest |
+| `respondedAt` | Timestamp of submission |
+
+## 48-hour cutoff
+
+Guests cannot change an existing RSVP within 48 hours of the event date. This cutoff is enforced by the RSVP submission API and configured via the `REMINDER_CUTOFF_HOURS` constant (`48`).
+
+```typescript
+// src/lib/constants.ts
+export const REMINDER_CUTOFF_HOURS = 48;
+```
+
+<Warning>
+  The cutoff applies to **changes** to an existing RSVP. A guest who has not yet responded can still submit their first response after the cutoff.
+</Warning>
+
+## Dietary preference and notes
+
+At the top-level submission, the guest can update their overall `dietaryPref` and `dietaryNotes`. For plus-one companions, a separate `plusOneDietaryPref` can be collected.
+
+## Real-time CRM webhook
+
+Every RSVP submission fires a webhook to the registered CRM endpoint:
+
+```typescript
+// src/lib/services/webhook.ts
+await dispatchRSVPWebhook(weddingId, guestData);
+```
+
+Behaviour:
+- **Fire-and-forget**: the webhook is dispatched asynchronously; the guest's RSVP response is not delayed.
+- **Timeout**: 5 seconds. If the CRM does not respond within 5 seconds, the webhook attempt is abandoned.
+- **No retry**: failed webhooks are not retried automatically. The CRM's **Sync from RSVP** button performs a full resync if needed.
+- **Registered URL**: stored on the `Wedding.crmWebhookUrl` field; set via `PUT /api/crm/weddings/:id/webhook`.
+
+## API endpoints
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/guests/:guestToken` | Token | Guest portal data (profile + event invites) |
+| `POST` | `/api/guests/:guestToken/rsvp` | Token | Submit RSVP responses (fires CRM webhook) |

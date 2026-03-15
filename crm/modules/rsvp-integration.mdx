@@ -1,0 +1,147 @@
+---
+title: "RSVP integration"
+description: "Connect the Wedding CRM to the RSVP Platform for live headcounts, guest lists, and real-time webhook updates."
+---
+
+The **RSVP & Guests** tab on each wedding dashboard connects the CRM directly to the RSVP Platform (Product 2, port 3000). Guest data flows in both directions: the CRM can push guest lists to the RSVP platform and pull live headcounts and RSVP statuses back.
+
+## How the integration works
+
+Each `Wedding` record in the CRM stores three integration fields:
+
+| Field | Description |
+| --- | --- |
+| `rsvpPlatformUrl` | Base URL of the RSVP Platform (e.g. `http://localhost:3000`) |
+| `rsvpWeddingId` | ID of the corresponding wedding on the RSVP Platform |
+| `rsvpApiKey` | Planner API key (Bearer token) for authenticating CRM → RSVP requests |
+
+Once saved, the CRM registers itself as a webhook receiver on the RSVP Platform so that every guest RSVP submission is pushed to the CRM in real time.
+
+## Connection setup
+
+<Steps>
+  <Step title="Open the RSVP & Guests tab">
+    Navigate to any wedding at `/weddings/:id` and click the **RSVP & Guests** tab.
+  </Step>
+  <Step title="Open integration settings">
+    If the platform is not yet connected, click **Connect RSVP Platform**. If already connected, click **Settings** to reconfigure.
+  </Step>
+  <Step title="Enter the connection details">
+    Fill in the RSVP Platform URL (`http://localhost:3000`), the Wedding ID from the RSVP Platform database, and the Planner API Key (auto-generated during RSVP Platform registration — find it via `npx prisma studio` on the RSVP project).
+  </Step>
+  <Step title="Test the connection">
+    Click **Test Connection**. A green success indicator confirms the credentials are valid.
+  </Step>
+  <Step title="Save and sync">
+    Click **Save & Connect**. The CRM calls `PUT /api/crm/weddings/:id/webhook` on the RSVP Platform to register its webhook URL (`http://localhost:3001/api/webhooks/rsvp`). Then click **Sync from RSVP** to pull the full guest list.
+  </Step>
+</Steps>
+
+## Data flow
+
+<Tabs>
+  <Tab title="CRM pulls from RSVP">
+    The CRM proxies requests through its own API to the RSVP Platform:
+
+    | CRM endpoint | Proxies to RSVP endpoint | Description |
+    | --- | --- | --- |
+    | `GET /api/weddings/:id/rsvp/headcounts` | `GET /api/crm/weddings/:id/headcounts` | Per-event confirmed PAX aggregates |
+    | `GET /api/weddings/:id/rsvp/guests` | `GET /api/crm/weddings/:id/guests` | Full paginated guest list |
+
+    If the RSVP Platform is unreachable, both endpoints fall back to the locally cached `RSVPGuest` records.
+  </Tab>
+  <Tab title="CRM pushes to RSVP">
+    Push the CRM's guest list to the RSVP Platform:
+
+    ```bash
+    POST /api/weddings/:id/rsvp/sync
+    ```
+
+    This proxies to `POST /api/crm/weddings/:id/guests/sync` on the RSVP Platform, which upserts guests deduplicated by phone number.
+  </Tab>
+  <Tab title="Real-time webhooks">
+    When a guest submits an RSVP on the RSVP Platform:
+
+    1. The RSVP Platform fires `dispatchRSVPWebhook()` (fire-and-forget, 5-second timeout).
+    2. The payload is delivered to `POST /api/webhooks/rsvp` on the CRM.
+    3. The CRM upserts the `RSVPGuest` cache record.
+
+    The webhook payload schema:
+
+    ```json
+    {
+      "type": "rsvp.updated",
+      "weddingId": "<rsvp-platform-wedding-id>",
+      "guestId": "<rsvp-platform-guest-id>",
+      "guestName": "Priya Sharma",
+      "guestPhone": "9876543210",
+      "responses": [
+        { "eventId": "evt_1", "rsvpStatus": "ATTENDING", "plusOneCount": 1, "childrenCount": 0 }
+      ],
+      "timestamp": "2026-03-15T10:30:00.000Z"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Full sync
+
+If the CRM was offline when RSVPs came in, use the full sync to rebuild the entire local cache:
+
+```bash
+POST /api/weddings/:id/rsvp/full-sync
+```
+
+This pulls all pages of guest data from the RSVP Platform and upserts every `RSVPGuest` record. Click **Sync from RSVP** in the UI to trigger this.
+
+## Headcount dashboard
+
+Once connected, the RSVP & Guests tab shows four summary tiles:
+
+| Tile | Description |
+| --- | --- |
+| Confirmed | Total confirmed PAX across all events |
+| Total PAX | Confirmed + plus ones + children |
+| Pending | Guests who have not yet responded |
+| Declined | Guests who declined all events |
+
+Below the summary tiles, a **per-event headcount table** breaks down Confirmed, Plus Ones, Children, Total PAX, Pending, and Declined for each ceremony (Mehendi, Sangeet, Reception, etc.).
+
+## Live guest list
+
+The guest list table shows:
+
+- Name with a **VIP** badge for VIP guests
+- Phone number
+- Relationship side (Bride / Groom / Mutual)
+- Group tag
+- Dietary preference
+- Overall RSVP status (Attending / Pending / Declined) as a coloured badge
+
+## Integration API reference
+
+**CRM-side endpoints:**
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/api/weddings/:id/rsvp/settings` | Get integration config |
+| `PUT` | `/api/weddings/:id/rsvp/settings` | Save config and auto-register webhook |
+| `GET` | `/api/weddings/:id/rsvp/guests` | Proxy to RSVP guest list (with cache fallback) |
+| `GET` | `/api/weddings/:id/rsvp/headcounts` | Proxy to RSVP headcounts |
+| `POST` | `/api/weddings/:id/rsvp/sync` | Push guests to RSVP Platform |
+| `POST` | `/api/weddings/:id/rsvp/full-sync` | Full resync — rebuild local cache |
+| `POST` | `/api/webhooks/rsvp` | Receive real-time RSVP webhook updates |
+
+**RSVP Platform endpoints consumed by the CRM:**
+
+| Method | Endpoint | Auth | Description |
+| --- | --- | --- | --- |
+| `GET` | `/api/crm/weddings/:id/guests` | Bearer | Full guest list |
+| `POST` | `/api/crm/weddings/:id/guests/sync` | Bearer | Upsert guest list from CRM |
+| `GET` | `/api/crm/weddings/:id/headcounts` | Bearer | Per-event PAX counts |
+| `GET` | `/api/crm/weddings/:id/webhook` | Bearer | Get registered webhook URL |
+| `PUT` | `/api/crm/weddings/:id/webhook` | Bearer | Set/update webhook URL |
+
+<Note>
+All CRM → RSVP API calls use the planner's API key as a Bearer token in the `Authorization` header. Webhook calls from RSVP → CRM carry no authentication in development; HMAC signing is recommended for production.
+</Note>
