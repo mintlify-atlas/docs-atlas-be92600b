@@ -1,0 +1,193 @@
+{
+  "projectType": "saas",
+  "projectName": "WedTech Solutions",
+  "projectDescription": "A comprehensive wedding technology suite comprising a Wedding CRM for planners and a Wedding RSVP Platform for guest management, tightly integrated via REST APIs and real-time webhooks.",
+  "theme": "almond",
+  "primaryColor": "#C4834A",
+  "lightColor": "#F9EFE6",
+  "darkColor": "#7B3F1A",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Overview",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/environment-variables",
+              "configuration/database-setup"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Wedding CRM",
+        "groups": [
+          {
+            "group": "CRM Overview",
+            "pages": [
+              "crm/overview",
+              "crm/authentication"
+            ]
+          },
+          {
+            "group": "Modules",
+            "pages": [
+              "crm/modules/lead-pipeline",
+              "crm/modules/wedding-dashboard",
+              "crm/modules/checklist-sop",
+              "crm/modules/vendor-management",
+              "crm/modules/data-library",
+              "crm/modules/client-portal",
+              "crm/modules/rsvp-integration"
+            ]
+          },
+          {
+            "group": "Data Models",
+            "pages": [
+              "crm/data-models"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "RSVP Platform",
+        "groups": [
+          {
+            "group": "RSVP Overview",
+            "pages": [
+              "rsvp/overview",
+              "rsvp/authentication"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "rsvp/features/guest-management",
+              "rsvp/features/rsvp-collection",
+              "rsvp/features/digital-invitations",
+              "rsvp/features/checkin",
+              "rsvp/features/seating-chart",
+              "rsvp/features/accommodation",
+              "rsvp/features/analytics",
+              "rsvp/features/photo-wall",
+              "rsvp/features/reminders"
+            ]
+          },
+          {
+            "group": "Data Models",
+            "pages": [
+              "rsvp/data-models"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "RSVP Platform API",
+            "pages": [
+              "api/rsvp/auth",
+              "api/rsvp/weddings",
+              "api/rsvp/events",
+              "api/rsvp/guests",
+              "api/rsvp/checkin",
+              "api/rsvp/analytics",
+              "api/rsvp/accommodation",
+              "api/rsvp/seating",
+              "api/rsvp/reminders",
+              "api/rsvp/photos",
+              "api/rsvp/display",
+              "api/rsvp/crm-integration"
+            ]
+          },
+          {
+            "group": "CRM API",
+            "pages": [
+              "api/crm/auth",
+              "api/crm/dashboard",
+              "api/crm/leads",
+              "api/crm/weddings",
+              "api/crm/vendors",
+              "api/crm/checklists",
+              "api/crm/library",
+              "api/crm/portal",
+              "api/crm/rsvp-proxy",
+              "api/crm/webhooks"
+            ]
+          },
+          {
+            "group": "Integration",
+            "pages": [
+              "api/integration/overview",
+              "api/integration/webhooks",
+              "api/integration/response-format"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Kanban lead pipeline with 7 stages and one-click lead-to-wedding conversion",
+    "Wedding project dashboard with 6 tabbed modules per wedding",
+    "SOP-driven checklist engine with pre-built templates and auto-calculated due dates",
+    "Vendor database with 16 categories and follow-up tracking",
+    "Token-based client portal with configurable permissions",
+    "Token-based guest RSVP portal with per-event attendance and dietary preferences",
+    "QR code check-in with HMAC-SHA256 signature verification",
+    "Digital invitation builder with 5 themes and 9 languages",
+    "Visual seating chart with drag-and-drop guest assignment",
+    "Multi-channel reminder engine (WhatsApp, SMS, Email) powered by BullMQ + Redis",
+    "Bidirectional CRM ↔ RSVP integration via REST API and real-time webhooks",
+    "Photo wall with guest uploads, moderation, and Cloudinary CDN",
+    "Analytics dashboard with per-event RSVP breakdown and dietary distribution",
+    "Accommodation management with hotel rooms and guest-to-room assignment"
+  ],
+  "publicApiSurface": [
+    "POST /api/auth/register",
+    "GET /api/weddings",
+    "POST /api/weddings",
+    "GET /api/weddings/:id",
+    "PATCH /api/weddings/:id",
+    "DELETE /api/weddings/:id",
+    "GET /api/weddings/:id/events",
+    "POST /api/weddings/:id/events",
+    "GET /api/weddings/:id/guests",
+    "POST /api/weddings/:id/guests",
+    "POST /api/weddings/:id/guests/import",
+    "GET /api/guests/:guestToken",
+    "POST /api/guests/:guestToken/rsvp",
+    "GET /api/checkin/:code/:slug",
+    "POST /api/checkin/:code/:slug",
+    "GET /api/weddings/:id/analytics",
+    "GET /api/weddings/:id/accommodation",
+    "GET /api/weddings/:id/seating",
+    "GET /api/weddings/:id/reminders",
+    "POST /api/weddings/:id/reminders/send",
+    "GET /api/crm/weddings/:id/guests",
+    "POST /api/crm/weddings/:id/guests/sync",
+    "GET /api/crm/weddings/:id/headcounts",
+    "PUT /api/crm/weddings/:id/webhook",
+    "GET /api/display/:code",
+    "GET /api/gallery/:code",
+    "GET /api/dashboard (CRM)",
+    "GET /api/leads (CRM)",
+    "POST /api/leads/convert (CRM)",
+    "GET /api/vendors (CRM)",
+    "GET /api/checklists (CRM)",
+    "GET /api/library (CRM)",
+    "GET /api/portal (CRM)",
+    "POST /api/import (CRM)",
+    "POST /api/webhooks/rsvp (CRM)"
+  ]
+}
